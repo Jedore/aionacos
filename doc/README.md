@@ -1,0 +1,40 @@
+- grpc / 网络连接 / 断开重连优化 / 控制好服务状态
+- 最外层，自定义传参(高优先级) + env, 命名空间、分组、集群等 可默认、可传入
+- Auth 账户密码 / ak/sk
+    - Auth 任务周期可以使用 过期时间 (其他认证方式是否有此时间)
+- shutdown
+- 配置解密
+- redo service
+    - update task 等
+    - 启动时不进行 redo
+- failover reactor
+- 内存缓存、磁盘缓存（加载）(多进程)
+- 服务防推空, config 需要吗
+- 监控 metrics
+- 启动过程为 同步方式
+- Client 端限流阈值
+- 断网时 read_server_request_task 分析
+
+- 语法
+    - 文档字符串其主要逻辑
+
+- license
+- CHANGELOG.md
+- poetry
+- pytest
+- CI
+    - check
+    - pytest
+    - doc gen
+    - test/pypi
+    - tag
+    - release
+- doc
+- cibuildwheel
+- check
+    - flake8 pylint
+    - black isort
+    - mypy
+- pre-commit
+- pypi
+- README.md 中英
