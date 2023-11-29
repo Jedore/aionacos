@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "aionacos"
+version = "0.1.0"
+description = ""
+authors = ["Jedore <jedorefight@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "aionacos" }]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+aiohttp = "^3.8.6"
+grpcio = "^1.59.2"
+grpcio-tools = "^1.59.2"
+httpx = "^0.25.1"
+netifaces2 = "^0.0.18"
+
+
+[[tool.poetry.source]]
+name = "qinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+secondary = false
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

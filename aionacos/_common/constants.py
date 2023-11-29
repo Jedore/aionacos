@@ -1,0 +1,115 @@
+from enum import Enum
+
+# common constants
+CLIENT_VERSION = "aionacos:0.1.0"
+
+DATA_IN_BODY_VERSION = 204
+
+DEFAULT_GROUP = "DEFAULT_GROUP"
+
+APP_NAME = "AppName"
+
+UNKNOWN_APP = "UnknownApp"
+
+NULL = ""
+
+DATAID = "dataId"
+
+GROUP = "group"
+
+TOKEN = "token"
+
+ACCESS_TOKEN = "access_token"
+
+USER_NAME = "username"
+
+SDK_GRPC_PORT_DEFAULT_OFFSET = 1000
+
+CLUSTER_GRPC_PORT_DEFAULT_OFFSET = 1001
+
+ONCE_TIMEOUT = 2000
+
+CONFIG_LONG_POLL_TIMEOUT = 30000
+
+MIN_CONFIG_LONG_POLL_TIMEOUT = 10000
+
+CONFIG_RETRY_TIME = 2000
+
+MAX_RETRY = 3
+
+RECV_WAIT_TIMEOUT = ONCE_TIMEOUT * 5
+
+ENCODE = "UTF-8"
+
+DEFAULT_PROTECT_THRESHOLD = 0.0
+
+CLIENT_APPNAME_HEADER = "Client-AppName"
+
+CLIENT_REQUEST_TS_HEADER = "Client-RequestTS"
+
+CLIENT_REQUEST_TOKEN_HEADER = "Client-RequestToken"
+
+NAMING_INSTANCE_ID_SPLITTER = "#"
+
+DEFAULT_CLUSTER_NAME = "DEFAULT"
+
+DEFAULT_HEART_BEAT_TIMEOUT = 15 * 1000
+
+DEFAULT_IP_DELETE_TIMEOUT = 30 * 1000
+
+DEFAULT_HEART_BEAT_INTERVAL = 5 * 1000
+
+DEFAULT_NAMESPACE_ID = "public"
+
+SERVICE_INFO_SPLITER = "@@"
+
+NUMBER_PATTERN_STRING = "^\\d+$"
+
+DEFAULT_INSTANCE_ID_GENERATOR = "simple"
+
+SNOWFLAKE_INSTANCE_ID_GENERATOR = "snowflake"
+
+HTTP_PREFIX = "http://"
+
+COLON = ":"
+
+CHARSET_KEY = "charset"
+
+CLUSTER_NAME_PATTERN_STRING = "^[0-9a-zA-Z]+$"
+
+SERVER_ADDR_SPLITER = ";"
+
+READ_TIMEOUT = 3
+
+
+class Config(object):
+    CONFIG_MODULE = "config"
+    NOTIFY_HEADER = "notify"
+
+
+class Naming(object):
+    NAMING_MODULE = "naming"
+    CMDB_CONTEXT_TYPE = "CMDB"
+
+
+class Remote(object):
+    INTERNAL_MODULE = "internal"
+
+
+class ExceptionCode(str, Enum):
+    DESERIALIZE_ERROR_CODE = 101
+    SERIALIZE_ERROR_CODE = 100
+
+
+# remote constants
+LABEL_SOURCE = "source"
+
+LABEL_SOURCE_SDK = "sdk"
+
+LABEL_SOURCE_CLUSTER = "cluster"
+
+LABEL_MODULE = "module"
+
+LABEL_MODULE_CONFIG = "config"
+
+LABEL_MODULE_NAMING = "naming"
