@@ -78,7 +78,6 @@ class ServiceInfo(Serializable, metaclass=SlotsMeta):
         hosts: List[dict] = None,
         cacheMillis: int = 1000,
         reachProtectionThreshold: bool = False,
-        **kwargs,
     ):
         self.hosts = []
         if hosts is not None:
@@ -127,10 +126,6 @@ class ServiceInfo(Serializable, metaclass=SlotsMeta):
         return service_info
 
     def validate(self) -> bool:
-        """
-        Check whether service info is valid.
-        """
-
         if self.allIPs:
             return True
 
@@ -141,7 +136,4 @@ class ServiceInfo(Serializable, metaclass=SlotsMeta):
         return False
 
     def ip_count(self):
-        """
-        hosts count
-        """
         return len(self.hosts)

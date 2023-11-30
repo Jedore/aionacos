@@ -11,8 +11,8 @@ from .service_info_holder import ServiceInfoHolder
 from .subscriber import InstanceChangeNotifier
 from .utils import NamingUtils
 from .._auth.security_proxy import SecurityProxy
+from .._common import GrpcClient
 from .._common.exceptions import NacosException
-from .._common.grpc_client import GrpcClient
 from .._common.listener import ConnectionEventListener
 from .._common.log import logger
 from .._common.redo_service import RedoService
@@ -55,12 +55,10 @@ class NamingClient(object):
 
         self._security_proxy.refresh_auth_task()
 
-        self._grpc.register_connection_listener(NamingConnectionListener(self))
+        self._grpc.reg_conn_listener(NamingConnectionListener(self))
 
         # todo register connection listener
-        self._grpc.register_request_handler(
-            NamingPushRequestHandler(self._service_info_holder)
-        )
+        self._grpc.reg_req_handler(NamingPushRequestHandler(self._service_info_holder))
         await self._grpc.start()
         # todo register subscriber
 
@@ -84,12 +82,7 @@ class NamingClient(object):
         # todo don't raise
         raise NacosException(NacosException.SERVER_ERR, error)
 
-    async def register(
-        self,
-        service_name: str,
-        group_name: str,
-        instance: Instance,
-    ):
+    async def register(self, service_name: str, group_name: str, instance: Instance):
         # todo redo cache
         req = InstanceRequest(
             instance=instance,
@@ -102,12 +95,7 @@ class NamingClient(object):
         # todo redo instance register
         self.redo_service.add(self.register, service_name, group_name, instance)
 
-    async def deregister(
-        self,
-        service_name: str,
-        group_name: str,
-        instance: Instance,
-    ):
+    async def deregister(self, service_name: str, group_name: str, instance: Instance):
         # todo redo cache
         req = InstanceRequest(
             instance=instance,
@@ -120,10 +108,7 @@ class NamingClient(object):
         # todo redo instance register
 
     async def batch_register(
-        self,
-        service_name: str,
-        group_name: str,
-        instances: t.List[Instance],
+        self, service_name: str, group_name: str, instances: t.List[Instance]
     ):
         req = BatchInstanceRequest(
             instances=instances,
@@ -151,7 +136,7 @@ class NamingClient(object):
             namespace=self._namespace,
             healthyOnly=healthy_only,
         )
-        rsp = await self._req2server(req)  # type: QueryServiceResponse
+        rsp: QueryServiceResponse = await self._req2server(req)
         return rsp.serviceInfo
 
     async def subscribe(
@@ -173,7 +158,7 @@ class NamingClient(object):
                 namespace=self._namespace,
                 serviceName=service_name,
             )
-            rsp = await self._req2server(req)  # type: SubscribeServiceResponse
+            rsp: SubscribeServiceResponse = await self._req2server(req)
             service_info = rsp.serviceInfo
 
         # Deal service info.
@@ -344,9 +329,7 @@ class UpdateTask(object):
                         self._reset_fail_count()
 
                 logger.debug(
-                    "[Naming] Update task: %s, service: %s",
-                    self._name,
-                    service_info,
+                    "[Naming] Update task: %s, service: %s", self._name, service_info
                 )
 
             except asyncio.CancelledError:
@@ -399,12 +382,7 @@ class ServiceInfoUpdateService(object):
     def client(self):
         return self._client
 
-    def schedule_update(
-        self,
-        service_name: str,
-        group_name: str,
-        clusters: str,
-    ):
+    def schedule_update(self, service_name: str, group_name: str, clusters: str):
         """
         Schedule update task if absent.
         """

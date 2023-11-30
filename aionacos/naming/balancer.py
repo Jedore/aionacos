@@ -1,10 +1,13 @@
-from aionacos.naming.pojo import ServiceInfo
+from .pojo import ServiceInfo
+from .utils import Chooser
+from .._common.log import logger
 
 
 class Balancer(object):
     @staticmethod
-    def get_host_by_random_weight(service_info: ServiceInfo):
+    def random_host_by_weight(service_info: ServiceInfo):
         if not service_info.hosts:
-            # print('host size = 0')
+            logger.debug("[Naming] No host to serve for %s", service_info.name)
             return
-        # todo
+
+        return Chooser.random_by_weight(service_info.hosts)

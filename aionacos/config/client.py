@@ -10,10 +10,13 @@ from .request import *
 from .response import *
 from .. import _utils
 from .._auth.security_proxy import SecurityProxy
-from .._common import constants as cst
-from .._common import properties
+from .._common import (
+    properties,
+    constants as cst,
+    GrpcClient,
+    ConnectionEventListener,
+)
 from .._common.exceptions import NacosException
-from .._common.grpc_client import GrpcClient, ConnectionEventListener
 from .._common.log import logger
 from .._common.redo_service import RedoService
 from .._common.request import Request
@@ -72,10 +75,10 @@ class ConfigClient(object):
 
         self._security_proxy.refresh_auth_task()
 
-        self._grpc.register_request_handler(
+        self._grpc.reg_req_handler(
             ConfigPushRequestHandler(self.notify_listen_config, self._cache_map)
         )
-        self._grpc.register_connection_listener(ConfigConnectionListener(self))
+        self._grpc.reg_conn_listener(ConfigConnectionListener(self))
 
         # todo server list change event
 

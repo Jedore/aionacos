@@ -141,7 +141,7 @@ class NamingService(object):
         group_name: str = cst.DEFAULT_GROUP,
         clusters: t.List[str] = None,
         subscribe: bool = True,
-    ):
+    ) -> Instance:
         clusters = NamingUtils.parse_clusters(clusters)
 
         if subscribe:
@@ -156,7 +156,7 @@ class NamingService(object):
             service_info = self._client.query_instance_of_service(
                 service_name, group_name, clusters, 0, False
             )
-        return Balancer.get_host_by_random_weight(service_info)
+        return Balancer.random_host_by_weight(service_info)
 
     async def subscribe(
         self,

@@ -18,6 +18,7 @@ class NacosException(Exception):
     NO_HANDLER = 302  # no handler found
 
     def __init__(self, code: int, msg: str = ""):
+        # todo according Exception
         self._code = code
         self._msg = msg
 

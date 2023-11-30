@@ -1,23 +1,35 @@
-import os
+import pickle
+from pathlib import Path
 
 from .pojo import ServiceInfo
-from .._common import properties
+from .._common.log import logger
 
 
-class DiskCache(object):
-    @classmethod
-    def make_sure_cache_dir_exists(cls, cache_dir: str):
-        if not os.path.exists(cache_dir):
-            os.makedirs(cache_dir)
+def make_sure_cache_dir_exists(cache_dir: Path):
+    if not cache_dir.exists():
+        cache_dir.mkdir(parents=True, exist_ok=True)
 
-    @classmethod
-    def write(cls, service_info: ServiceInfo):
-        cls.make_sure_cache_dir_exists(properties.cache_dir)
 
-        file_path = os.path.join(
-            properties.cache_dir, service_info.get_key_encoded()
-        )
-        # TODO How to avoid conflicting between multi instances.
-        with open(file_path) as fo:
-            # todo
-            pass
+def write(service_info: ServiceInfo, cache_dir: Path):
+    make_sure_cache_dir_exists(cache_dir)
+
+    file = cache_dir / service_info.get_key_encoded()
+    # TODO How to avoid conflicting between multi instances.
+    file.write_bytes(pickle.dumps(service_info, protocol=pickle.HIGHEST_PROTOCOL))
+    logger.debug(f"[Naming] Cache service info to {file}")
+
+
+def read(cache_dir: Path):
+    make_sure_cache_dir_exists(cache_dir)
+    service_info_map = {}
+    for path in cache_dir.iterdir():
+        if not path.is_file():
+            continue
+
+        try:
+            service_info = pickle.loads(path.read_bytes())
+            service_info_map[service_info.get_key2()] = service_info
+        except Exception as err:
+            logger.warning(f"[Naming] Failed to read cache file {path}: {err}")
+    logger.debug("[Naming] Loaded service info cache.")
+    return service_info_map

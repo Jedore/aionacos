@@ -16,7 +16,9 @@ naming_namespace = getenv("NACOS_NAMING_NAMESPACE", "")
 config_group = getenv("NACOS_CONFIG_GROUP", "")
 naming_group = getenv("NACOS_NAMING_GROUP", "")
 
-naming_load_cache_at_start = getenv("NACOS_NAMING_LOAD_CACHE_AT_START") == "true"
+naming_load_cache_at_start = (
+    getenv("NACOS_NAMING_LOAD_CACHE_AT_START", "true") == "true"
+)
 naming_push_empty_protection = (
     getenv("NACOS_NAMING_PUSH_EMPTY_PROTECTION", "true") == "true"
 )

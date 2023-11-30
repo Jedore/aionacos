@@ -1,3 +1,4 @@
+import random
 import re
 from typing import List
 
@@ -18,9 +19,7 @@ class NamingUtils(object):
         ):
             raise NacosException(NacosException.INVALID_PARAM)
 
-        if ins.clusterName and not cls.CLUSTER_NAME_PATTERN.match(
-            ins.clusterName
-        ):
+        if ins.clusterName and not cls.CLUSTER_NAME_PATTERN.match(ins.clusterName):
             raise NacosException(NacosException.INVALID_PARAM)
 
     @staticmethod
@@ -42,4 +41,6 @@ class NamingUtils(object):
 
 
 class Chooser(object):
-    pass
+    @staticmethod
+    def random_by_weight(hosts: List[Instance]):
+        return random.choices(hosts, weights=[host.weight for host in hosts], k=1)[0]
