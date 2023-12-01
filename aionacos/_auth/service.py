@@ -5,7 +5,7 @@ import httpx
 
 from . import constants as const
 from .._common import properties
-from aionacos._common.log import logger
+from .._common.log import logger
 from .._utils import timestamp
 
 
@@ -36,7 +36,7 @@ class NacosAuthService(AuthService):
     identity_context = {}
 
     def login(self):
-        logger.debug("[Auth] %s Login check.", self)
+        logger.debug("[ Auth ] %s login check", self)
 
         # Check whether identity is expired.
         if (
@@ -46,10 +46,11 @@ class NacosAuthService(AuthService):
             return True
 
         login_path = "/nacos/v1/auth/users/login"
-        for server in self.server_urls:
+        for url in self.server_urls:
             try:
+                # todo use aiohttp
                 rsp = httpx.post(
-                    server + login_path,
+                    url + login_path,
                     params={"username": properties.username},
                     data={"password": properties.password},
                 )
@@ -65,14 +66,12 @@ class NacosAuthService(AuthService):
                         self._token_refresh_window = self._token_ttl / 10
                         self._last_refresh_time = timestamp()
 
-                        logger.info(
-                            "[Auth] %s Login %s succeed.", self, server
-                        )
+                        logger.info("[ Auth ] %s login %s succeed", self, url)
                         return True
                     error = rsp.text
                 else:
-                    error = "unknown error."
+                    error = "unknown error"
             except Exception as err:
                 error = err
 
-            logger.error("[Auth] %s Login %s failed: %s", self, server, error)
+            logger.error("[ Auth ] %s login failed: %s, %s", self, url, error)

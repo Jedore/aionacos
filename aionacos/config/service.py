@@ -22,11 +22,11 @@ class ConfigService(object):
         self._client = ConfigClient(self._filter_chain_manager, server_manager)
 
     async def start(self):
-        logger.info("[Config] Service start ...")
+        logger.info("[Config] service start")
         await self._client.start()
 
     def stop(self):
-        logger.info("[Config] Service stop ...")
+        logger.info("[Config] service stop")
         self._client.stop()
 
     async def get_config(

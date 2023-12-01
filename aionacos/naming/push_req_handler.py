@@ -2,7 +2,7 @@ from .request import NotifySubscriberRequest
 from .response import NotifySubscriberResponse
 from .service_info_holder import ServiceInfoHolder
 from .._common.request import Request
-from .._common.server_request_handler import ServerRequestHandler
+from .._common.server_req_handler import ServerRequestHandler
 
 
 class NamingPushRequestHandler(ServerRequestHandler):
@@ -14,5 +14,5 @@ class NamingPushRequestHandler(ServerRequestHandler):
 
     async def request_reply(self, req: Request):
         if isinstance(req, NotifySubscriberRequest):
-            self._service_info_holder.process_service_info(req.serviceInfo)
+            self._service_info_holder.process_service(req.serviceInfo)
             return NotifySubscriberResponse()

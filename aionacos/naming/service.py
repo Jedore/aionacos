@@ -18,7 +18,6 @@ from .._common.selector import AbstractSelector
 class NamingService(object):
     def __init__(self):
         self.namespace = properties.naming_namespace or cst.DEFAULT_NAMESPACE_ID
-
         self._notifier_event_scope = str(uuid4())
         self._change_notifier = InstanceChangeNotifier(self._notifier_event_scope)
 
@@ -26,7 +25,6 @@ class NamingService(object):
         NOTIFY_CENTER.register_subscriber(self._change_notifier)
 
         self._service_info_holder = ServiceInfoHolder(self._notifier_event_scope)
-
         self._client = NamingClient(
             self.namespace,
             self._service_info_holder,
@@ -34,11 +32,11 @@ class NamingService(object):
         )
 
     async def start(self):
-        logger.info("[Naming] Service start ...")
+        logger.info("[Naming] service start")
         await self._client.start()
 
     def stop(self):
-        logger.info("[Naming] Service stop ...")
+        logger.info("[Naming] service stop")
         self._client.stop()
 
     async def register_instance(
@@ -74,10 +72,8 @@ class NamingService(object):
         instances: t.List[Instance],
         group_name: str = cst.DEFAULT_GROUP,
     ):
-        if not instances:
-            return
-
-        await self._client.batch_register(service_name, group_name, instances)
+        # todo why
+        pass
 
     async def get_all_instances(
         self,
@@ -164,7 +160,7 @@ class NamingService(object):
         listener: EventListener,
         group_name: str = cst.DEFAULT_GROUP,
         clusters: t.List[str] = None,
-    ):
+    ) -> t.Optional[ServiceInfo]:
         if not listener:
             return
 

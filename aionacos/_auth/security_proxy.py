@@ -15,8 +15,8 @@ class SecurityProxy(Singleton):
         self._ref_count += 1
 
     def init(self, server_urls: List[str]):
-        self._task = None  # type: Optional[asyncio.Task] # noqa
-        self._auth_plugin_manager = AuthPluginManager(server_urls)  # noqa
+        self._task: Optional[asyncio.Task] = None
+        self._auth_plugin_manager = AuthPluginManager(server_urls)
 
     def login(self):
         """
@@ -40,7 +40,7 @@ class SecurityProxy(Singleton):
 
     def refresh_auth_task(self):
         if not properties.auth_enable:
-            logger.info("[Auth] Auth disabled.")
+            logger.warning("[ Auth ] auth disabled")
             return
 
         if self._is_refreshing:
@@ -49,11 +49,11 @@ class SecurityProxy(Singleton):
         self._is_refreshing = True
 
         if not self._auth_plugin_manager.auth_services:
-            logger.info("[Auth] No auth services.")
+            logger.warning("[ Auth ] no auth services")
             return
 
         async def loop():
-            logger.info("[Auth] Start refresh auth status...")
+            logger.debug("[ Auth ] start refresh auth status ...")
 
             while True:
                 try:

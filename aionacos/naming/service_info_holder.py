@@ -28,7 +28,7 @@ class ServiceInfoHolder(object):
         self.notifier_event_scope = notifier_event_scop
 
     @property
-    def service_info_map(self) -> t.Dict[str, ServiceInfo]:
+    def service_map(self) -> t.Dict[str, ServiceInfo]:
         return self._service_info_map
 
     def get_service_info(
@@ -78,7 +78,7 @@ class ServiceInfoHolder(object):
 
         return False
 
-    def process_service_info(self, service_info: t.Optional[ServiceInfo]):
+    def process_service(self, service_info: t.Optional[ServiceInfo]):
         if service_info is None:
             return
 
@@ -87,16 +87,14 @@ class ServiceInfoHolder(object):
         old_service_info = self._service_info_map.get(key)
 
         if self.is_empty_or_error_push(service_info):
-            logger.debug("[Naming] Push empty protection %s.", service_info)
-            # todo old info
-            return old_service_info
+            logger.debug("[Naming] push empty protection %s.", service_info)
+            # return old_service_info
 
         self._service_info_map[key] = service_info
 
         if self.is_changed_service_info(old_service_info, service_info):
             # Publish notify event when service info changed.
-            logger.debug("[Naming] Service info changed: %s", service_info.hosts)
-
+            logger.debug("[Naming] service info changed: %s", service_info.hosts)
             NOTIFY_CENTER.publish_event(
                 InstanceChangeEvent(
                     self.notifier_event_scope,
@@ -108,9 +106,9 @@ class ServiceInfoHolder(object):
             )
             disk_cache.write(service_info, self.cache_dir)
         else:
-            logger.debug("[Naming] Service info not changed")
+            logger.debug("[Naming] service info not changed")
 
-        return service_info
+        # return service_info
 
 
 class FailoverReactor(object):

@@ -6,7 +6,7 @@ from .request import *
 from .response import *
 from .. import _utils
 from .._common.request import Request
-from .._common.server_request_handler import ServerRequestHandler
+from .._common.server_req_handler import ServerRequestHandler
 
 
 class ConfigPushRequestHandler(ServerRequestHandler):
@@ -22,8 +22,8 @@ class ConfigPushRequestHandler(ServerRequestHandler):
             key = group_key.get_key_tenant(req.dataId, req.group, req.tenant)
             cache = self._cache_map.get(key)
             if cache:
-                cache._last_modified_time = _utils.timestamp()
-                cache._is_sync_with_server = False
+                cache.last_modified_time = _utils.timestamp()
+                cache.is_sync_with_server = False
                 self._notify_listen_config()
             return ConfigChangeNotifyResponse()
         elif isinstance(req, ClientConfigMetricRequest):
