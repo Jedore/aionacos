@@ -57,7 +57,7 @@ class ConfigClient(object):
         self._grpc = GrpcClient(CONFIG, server_manager, labels)
         self._chain_manager = chain_manager
         self._cache_map: t.Dict[str, CacheData] = {}
-        self._security_proxy = SecurityProxy(server_manager.get_server_urls())
+        self._security_proxy = SecurityProxy(CONFIG, server_manager.get_server_urls())
         self._redo_service = ConfigRedoService(self)
         self._listen_task: t.Optional[asyncio.Task] = None
 
@@ -87,10 +87,13 @@ class ConfigClient(object):
     async def _req2server(self, req: Request, throw: bool = True) -> ResponseType:
         req.headers.update(self._security_proxy.get_identity_context())
         rsp: ResponseType = await self._grpc.request(req, throw=throw)
-        if not rsp.success:
-            logger.error("[Config] req failed: %s, %s", req, rsp)
-            # todo external function deal failed response
-        return rsp
+        if rsp.success:
+            return rsp
+
+        # when request failed
+        logger.error("[Config] req failed: %s, %s", req, rsp)
+        if throw:
+            NacosException(rsp.errorCode, rsp.message)
 
     def add_listeners(self, data_id: str, group: str, listeners: t.List[Listener]):
         cache = self.add_cache_data_if_absent(data_id, group)
@@ -183,7 +186,7 @@ class ConfigClient(object):
         req.headers.update({NOTIFY_HEADER: str(notify).lower()})
         req.headers.update(self.get_common_header())
 
-        rsp = await self._req2server(req)  # type: ConfigQueryResponse
+        rsp: ConfigQueryResponse = await self._req2server(req)
         if rsp.success:
             rsp.contentType = rsp.contentType or "text"
             # todo save snapshot encrypted
@@ -192,11 +195,13 @@ class ConfigClient(object):
             # todo save snapshot encrypted
             pass
         elif rsp.errorCode == ConfigQueryResponse.CONFIG_QUERY_CONFLICT:
+            # todo CONFIG_QUERY_CONFLICT
             pass
         else:
+            # todo other error
             pass
 
-        logger.error("[Config] QueryConfig failed: %s, %s", rsp, req)
+        logger.error("[Config] query config failed: %s, %s", rsp, req)
         raise NacosException(rsp.errorCode, msg=rsp.message)
 
     async def publish_config(
@@ -228,14 +233,14 @@ class ConfigClient(object):
                 ENCRYPTED_DATA_KEY_PARAM: encrypted_data_key or "",
             }
         )
-        rsp = await self._req2server(req)  # type: ConfigPublishResponse
+        rsp: ConfigPublishResponse = await self._req2server(req)
         return rsp.success
 
     async def remove_config(
         self, data_id: str, group: str, tenant: str, tag: str = None
     ) -> bool:
         req = ConfigRemoveRequest(data_id=data_id, group=group, tenant=tenant, tag=tag)
-        rsp = await self._req2server(req)  # type: ConfigRemoveResponse
+        rsp: ConfigRemoveResponse = await self._req2server(req)
         return rsp.success
 
     async def refresh_content_and_check(self, changed_key: str, notify: bool):
@@ -250,9 +255,9 @@ class ConfigClient(object):
             if cache is None:
                 return
 
-            rsp = await self.query_config(
+            rsp: ConfigQueryResponse = await self.query_config(
                 cache.data_id, cache.group, cache.tenant, notify
-            )  # type: ConfigQueryResponse
+            )
 
             # Push empty protection.
             # if not rsp.content:
@@ -261,7 +266,7 @@ class ConfigClient(object):
 
             cache.encrypted_data_key = rsp.encryptedDataKey
             cache.set_content(rsp.content)
-            cache._type = rsp.contentType or cache._type
+            cache.type = rsp.contentType or cache.type
 
             cache.check_listener_md5()
         except Exception as err:
@@ -317,10 +322,10 @@ class ConfigClient(object):
                         continue
 
                 if cache.listeners:
-                    if not cache._is_use_local_config:
+                    if not cache.is_use_local_config:
                         listen_caches.append(cache)
                 else:
-                    if not cache._is_use_local_config:
+                    if not cache.is_use_local_config:
                         remove_listen_caches.append(cache)
 
             has_changed_keys = False

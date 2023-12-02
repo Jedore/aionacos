@@ -1,11 +1,12 @@
+from .client import ConfigClient
+from .filter import ConfigFilterChainManager, ConfigFilter
+from .listener import Listener
+from .local_info_processor import LocalConfigInfoProcessor
+from .response import *
 from .._common import properties, constants as cst
 from .._common.exceptions import NacosException
 from .._common.log import logger
 from .._common.server_manager import ServerManager
-from ..config.client import ConfigClient
-from ..config.filter import ConfigFilterChainManager, ConfigFilter
-from ..config.listener import Listener
-from ..config.local_info_processor import LocalConfigInfoProcessor
 
 
 class ConfigService(object):
@@ -29,18 +30,14 @@ class ConfigService(object):
         logger.info("[Config] service stop")
         self._client.stop()
 
-    async def get_config(
-        self,
-        data_id: str,
-        group: str = cst.DEFAULT_GROUP,
-    ):
+    async def get_config(self, data_id: str, group: str = cst.DEFAULT_GROUP):
         # todo
         content = LocalConfigInfoProcessor.get_failover()
         if content is not None:
             return content
 
         try:
-            rsp = await self._client.query_config(
+            rsp: ConfigQueryResponse = await self._client.query_config(
                 data_id, group, self._namespace, False
             )
             # todo filter
@@ -49,20 +46,13 @@ class ConfigService(object):
             pass
 
     async def get_config_and_sign_listener(
-        self,
-        data_id: str,
-        listener: Listener,
-        group: str = cst.DEFAULT_GROUP,
+        self, data_id: str, listener: Listener, group: str = cst.DEFAULT_GROUP
     ):
         # todo
         pass
 
     async def publish_config(
-        self,
-        data_id: str,
-        content: str,
-        type_: str,
-        group: str = cst.DEFAULT_GROUP,
+        self, data_id: str, content: str, type_: str, group: str = cst.DEFAULT_GROUP
     ):
         # todo encrypt and publish config
         pass
@@ -77,26 +67,16 @@ class ConfigService(object):
     ):
         pass
 
-    async def remove_config(
-        self,
-        data_id: str,
-        group: str = cst.DEFAULT_GROUP,
-    ) -> bool:
+    async def remove_config(self, data_id: str, group: str = cst.DEFAULT_GROUP) -> bool:
         return await self._client.remove_config(data_id, group, self._namespace)
 
     def add_listener(
-        self,
-        data_id: str,
-        listener: Listener,
-        group: str = cst.DEFAULT_GROUP,
+        self, data_id: str, listener: Listener, group: str = cst.DEFAULT_GROUP
     ):
         self._client.add_tenant_listeners(data_id, group, [listener])
 
     def remove_listener(
-        self,
-        data_id: str,
-        listener: Listener,
-        group: str = cst.DEFAULT_GROUP,
+        self, data_id: str, listener: Listener, group: str = cst.DEFAULT_GROUP
     ):
         self._client.remove_tenant_listener(data_id, group, listener)
 

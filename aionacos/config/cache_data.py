@@ -42,7 +42,7 @@ class CacheData(object):
         self.group = group
         self.tenant = tenant
         self.listeners: t.List[ListenerWarp] = []
-        self._type = ""
+        self.type = ""
         self.last_modified_time = timestamp()  # second
 
         # 1.first add listener, default is false; need to check.
@@ -63,7 +63,7 @@ class CacheData(object):
             self.encrypted_data_key = self.load_encrypted_data_key_from_disk()
             self.md5 = self.get_md5()
 
-        self._is_use_local_config = False
+        self.is_use_local_config = False
 
         # todo init snapshot
 
@@ -103,7 +103,7 @@ class CacheData(object):
                     self.data_id,
                     self.group,
                     self.content,
-                    self._type,
+                    self.type,
                     self.md5,
                     self.encrypted_data_key,
                     wrap,
