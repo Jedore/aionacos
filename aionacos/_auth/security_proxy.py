@@ -4,19 +4,17 @@ from typing import List, Optional
 from .plugin_manager import AuthPluginManager
 from .._common import properties
 from .._common.log import logger
-from .._common.singleton import Singleton
 
 
-class SecurityProxy(Singleton):
+class SecurityProxy(object):
     _is_refreshing = False
     _ref_count = 0
 
-    def __init__(self, server_urls: List[str]):
+    def __init__(self, name: str, server_urls: List[str]):
         self._ref_count += 1
-
-    def init(self, server_urls: List[str]):
+        self._name = name
         self._task: Optional[asyncio.Task] = None
-        self._auth_plugin_manager = AuthPluginManager(server_urls)
+        self._auth_plugin_manager = AuthPluginManager(name, server_urls)
 
     def login(self):
         """
@@ -40,7 +38,7 @@ class SecurityProxy(Singleton):
 
     def refresh_auth_task(self):
         if not properties.auth_enable:
-            logger.warning("[ Auth ] auth disabled")
+            logger.warning("[%s] auth disabled", self._name)
             return
 
         if self._is_refreshing:
@@ -49,11 +47,11 @@ class SecurityProxy(Singleton):
         self._is_refreshing = True
 
         if not self._auth_plugin_manager.auth_services:
-            logger.warning("[ Auth ] no auth services")
+            logger.warning("[%s] no auth services", self._name)
             return
 
         async def loop():
-            logger.debug("[ Auth ] start refresh auth status ...")
+            logger.debug("[%s] start refresh auth status", self._name)
 
             while True:
                 try:

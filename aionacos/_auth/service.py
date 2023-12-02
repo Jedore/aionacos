@@ -13,6 +13,9 @@ class AuthService(metaclass=ABCMeta):
     identity_context: Optional[dict] = None
     server_urls: Optional[list] = None
 
+    def __init__(self, name: str):
+        self._name = name
+
     def login(self):
         raise NotImplementedError()
 
@@ -36,7 +39,7 @@ class NacosAuthService(AuthService):
     identity_context = {}
 
     def login(self):
-        logger.debug("[ Auth ] %s login check", self)
+        logger.debug("[%s] %s login check", self._name, self)
 
         # Check whether identity is expired.
         if (
@@ -66,7 +69,7 @@ class NacosAuthService(AuthService):
                         self._token_refresh_window = self._token_ttl / 10
                         self._last_refresh_time = timestamp()
 
-                        logger.info("[ Auth ] %s login %s succeed", self, url)
+                        logger.info("[%s] %s login %s succeed", self._name, self, url)
                         return True
                     error = rsp.text
                 else:
@@ -74,4 +77,4 @@ class NacosAuthService(AuthService):
             except Exception as err:
                 error = err
 
-            logger.error("[ Auth ] %s login failed: %s, %s", self, url, error)
+            logger.error("[%s] %s login failed: %s, %s", self._name, self, url, error)

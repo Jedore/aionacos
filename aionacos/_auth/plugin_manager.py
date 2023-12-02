@@ -4,9 +4,8 @@ from .service import AuthService, NacosAuthService
 
 
 class AuthPluginManager(object):
-
-    def __init__(self, server_urls: List[str]):
-        self._auth_services: Tuple[AuthService] = (NacosAuthService(),)
+    def __init__(self, name: str, server_urls: List[str]):
+        self._auth_services: Tuple[AuthService] = (NacosAuthService(name),)
 
         for auth_service in self._auth_services:
             auth_service.server_urls = server_urls
