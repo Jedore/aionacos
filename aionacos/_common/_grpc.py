@@ -317,12 +317,7 @@ class GrpcClient(object):
 
     async def _close_connection(self):
         if self._conn:
-            logger.debug(
-                "[%s] close conn: %s, conn id: %s",
-                self._name,
-                self._conn.addr,
-                self._conn.conn_id,
-            )
+            logger.debug("[%s] close connection: %s", self._name, self._conn.conn_id)
             self.set_unhealthy()
             await self._conn.close()
             self._conn = None
@@ -349,6 +344,7 @@ class GrpcClient(object):
         while retry_times < self.RETRY_TIMES and timestamp() < t_start + timeout:
             wait_reconnect = False
             try:
+                # when connection is abnormal
                 if self._conn is None or not self.is_running():
                     wait_reconnect = True
                     # raise error, then retry.
@@ -357,7 +353,8 @@ class GrpcClient(object):
                     )
 
                 rsp = await self._conn.request(req, timeout=timeout)
-                # error response
+
+                # when server return ErrorResponse
                 if isinstance(rsp, ErrorResponse):
                     if rsp.errorCode == NacosException.UN_REGISTER:
                         wait_reconnect = True
@@ -365,7 +362,7 @@ class GrpcClient(object):
                         await self.switch_server_async()
 
                     # raise error, then retry.
-                    # raise NacosException(rsp.errorCode, msg=rsp.message)
+                    raise NacosException(rsp.errorCode, msg=rsp.message)
 
                 # update active time
                 self._set_active_time()
@@ -386,12 +383,12 @@ class GrpcClient(object):
 
             retry_times += 1
 
-        # Switch server when always failed.
-        # todo why? block exception
+        # Switch server asynchronously when always failed.
         if self.is_running():
             self.set_unhealthy()
             await self.switch_server_async(on_req_fail=True)
 
+        # raise when not success
         if throw:
             raise NacosException(NacosException.SERVER_ERR, msg=error)
 
