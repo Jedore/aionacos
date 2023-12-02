@@ -88,6 +88,7 @@ class ServiceInfoHolder(object):
 
         if self.is_empty_or_error_push(service_info):
             logger.debug("[Naming] push empty protection %s.", service_info)
+            # why return old service
             # return old_service_info
 
         self._service_info_map[key] = service_info
@@ -108,6 +109,7 @@ class ServiceInfoHolder(object):
         else:
             logger.debug("[Naming] service info not changed")
 
+        # why return service
         # return service_info
 
 

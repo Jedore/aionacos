@@ -12,11 +12,14 @@ from .subscriber import InstanceChangeNotifier
 from .utils import NamingUtils
 from .._auth.security_proxy import SecurityProxy
 from .._common import GrpcClient
+from .._common.exceptions import NacosException
 from .._common.listener import ConnectionEventListener
 from .._common.log import logger
 from .._common.response import ResponseType
 from .._common.selector import AbstractSelector
 from .._common.server_manager import ServerManager
+
+NAMING = "Naming"
 
 
 class NamingClient(object):
@@ -30,40 +33,44 @@ class NamingClient(object):
         self._namespace = namespace
         self._service_info_holder = service_info_holder
         server_manager = ServerManager()
-        self._grpc = GrpcClient("Naming", server_manager, labels)
-        self._security_proxy = SecurityProxy(server_manager.get_server_urls())
-        self._redo_service = NamingRedoService(self)
-        self._update_service = ServiceInfoUpdateService(
+        self._grpc = GrpcClient(NAMING, server_manager, labels)
+        self._security_proxy = SecurityProxy(NAMING, server_manager.get_server_urls())
+        self._redo = NamingRedoService(self)
+        self._update = ServiceInfoUpdateService(
             service_info_holder, change_notifier, self
         )
 
     @property
-    def update_service(self):
-        return self._update_service
+    def update(self):
+        return self._update
 
     async def start(self):
         logger.debug("[Naming] client start")
         self._security_proxy.refresh_auth_task()
-        self._grpc.reg_conn_listener(self._redo_service)
+        self._grpc.reg_conn_listener(self._redo)
         self._grpc.reg_req_handler(NamingPushRequestHandler(self._service_info_holder))
         await self._grpc.start()
 
     def stop(self):
         logger.debug("[Naming] client stop")
-        self._update_service.stop()
+        self._update.stop()
         self._security_proxy.stop()
         self._grpc.stop()
 
     async def _req2server(self, req, throw: bool = True) -> ResponseType:
         req.headers.update(self._security_proxy.get_identity_context())
         rsp: ResponseType = await self._grpc.request(req, throw=throw)
-        if not rsp.success:
-            logger.error("[Naming] req failed: %s, %s", req, rsp)
-            # todo redo request not throw
-            # todo external function deal failed response
-        return rsp
+        if rsp.success:
+            return rsp
 
-    async def register(self, service_name: str, group_name: str, instance: Instance):
+        # when request failed
+        logger.error("[Naming] req failed: %s, %s", req, rsp)
+        if throw:
+            NacosException(rsp.errorCode, rsp.message)
+
+    async def register(
+        self, service_name: str, group_name: str, instance: Instance, throw: bool = True
+    ):
         req = InstanceRequest(
             instance=instance,
             groupName=group_name,
@@ -71,10 +78,15 @@ class NamingClient(object):
             namespace=self._namespace,
             type_=naming_consts.REGISTER_INSTANCE,
         )
-        self._redo_service.cache_register(service_name, group_name, instance)
-        await self._req2server(req)
+        await self._req2server(req, throw=throw)
+
+        # cache after success
+        self._redo.cache_register(service_name, group_name, instance)
 
     async def deregister(self, service_name: str, group_name: str, instance: Instance):
+        # remove cache after success
+        self._redo.cache_deregister(service_name, group_name)
+
         req = InstanceRequest(
             instance=instance,
             groupName=group_name,
@@ -82,13 +94,12 @@ class NamingClient(object):
             namespace=self._namespace,
             type_=naming_consts.DE_REGISTER_INSTANCE,
         )
-        # todo redo cache, mark register cache
         await self._req2server(req)
 
     async def batch_register(
         self, service_name: str, group_name: str, instances: t.List[Instance]
     ):
-        # todo why
+        # todo support batch register, for what scenario
         pass
 
     async def query_instance_of_service(
@@ -112,7 +123,7 @@ class NamingClient(object):
         return rsp.serviceInfo
 
     async def subscribe(
-        self, service_name: str, group_name: str, clusters: str
+        self, service_name: str, group_name: str, clusters: str, throw: bool = True
     ) -> ServiceInfo:
         group_service_name = NamingUtils.get_group_name(service_name, group_name)
         key = ServiceInfo.get_key(group_service_name, clusters)
@@ -126,18 +137,24 @@ class NamingClient(object):
                 namespace=self._namespace,
                 serviceName=service_name,
             )
-            rsp: SubscribeServiceResponse = await self._req2server(req)
+            rsp: SubscribeServiceResponse = await self._req2server(req, throw=throw)
             service_info = rsp.serviceInfo
 
-        # Schedule update service task.
-        self._update_service.schedule_update(service_name, group_name, clusters)
-        # Deal service info.
-        self._service_info_holder.process_service(service_info)
-        # Add redo service.
-        self._redo_service.cache_subscribe(service_name, group_name, clusters)
+            # only process new service info
+            self._service_info_holder.process_service(service_info)
+
+        # schedule update task if service info valid
+        self._update.schedule_update(service_name, group_name, clusters)
+        # cache after if service info valid
+        self._redo.cache_subscribe(service_name, group_name, clusters)
         return service_info
 
     async def unsubscribe(self, service_name: str, group_name: str, clusters: str):
+        # stop update service task
+        self._update.stop_update(service_name, group_name, clusters)
+        # remove cache
+        self._redo.cache_unsubscribe(service_name, group_name, clusters)
+
         req = SubscribeServiceRequest(
             subscribe=False,
             clusters=clusters,
@@ -145,7 +162,6 @@ class NamingClient(object):
             namespace=self._namespace,
             serviceName=service_name,
         )
-        # todo redo, mark subscribed
         await self._req2server(req)
 
     async def get_services_list(
@@ -161,9 +177,9 @@ class NamingClient(object):
             groupName=group_name,
             namespace=self._namespace,
         )
-        # todo selector type
-        if selector is not None:
-            pass
+        # todo support selector
+        # if selector is not None:
+        #     pass
         rsp: ServiceListResponse = await self._req2server(req)
         return rsp.count, rsp.serviceNames
 
@@ -310,6 +326,8 @@ class ServiceInfoUpdateService(object):
         self._change_notifier = change_notifier
         self._service_map: t.Dict[str, asyncio.Task] = {}
         self._client = naming_client
+        # todo support configuration for update service or not
+        self._is_async_query_for_subscribed_service: bool = True
 
     @property
     def service_map(self):
@@ -328,24 +346,27 @@ class ServiceInfoUpdateService(object):
         return self._client
 
     def schedule_update(self, service_name: str, group_name: str, clusters: str):
-        # todo multi subscribed services share single task
+        if not self._is_async_query_for_subscribed_service:
+            return
+
         service_key = ServiceInfo.get_key(
             NamingUtils.get_group_name(service_name, group_name), clusters
         )
         if service_key in self._service_map:
             return
 
+        # todo multi subscribed services share single task
         self._service_map[service_key] = asyncio.create_task(
             UpdateTask(service_key, service_name, group_name, clusters, self).run()
         )
+        # logger.debug("[Naming] schedule update task: %s", service_key)
 
-        logger.debug("[Naming] schedule update task: %s", service_key)
-
-    async def stop_update(self, service_name: str, group_name: str, clusters: str):
+    def stop_update(self, service_name: str, group_name: str, clusters: str):
         service_key = ServiceInfo.get_key(
             NamingUtils.get_group_name(service_name, group_name), clusters
         )
 
+        # todo multi subscribed services share single task
         if service_key in self._service_map:
             task = self._service_map.pop(service_key)
             if not task.done():
@@ -374,7 +395,7 @@ class NamingRedoService(ConnectionEventListener):
         # logger.debug("[Naming] on connected.")
 
     def on_disconnected(self):
-        self._client.update_service.stop()
+        self._client.update.stop()
         # logger.debug("[Naming] on disconnected.")
 
     def cache_register(self, service_name: str, group_name: str, instance: Instance):
@@ -406,6 +427,6 @@ class NamingRedoService(ConnectionEventListener):
 
         logger.debug("[Naming] redo service start")
         for _, args in self._register_map.items():
-            await self._client.register(*args)
+            await self._client.register(*args, throw=False)
         for _, args in self._subscribe_map.items():
-            await self._client.subscribe(*args)
+            await self._client.subscribe(*args, throw=False)

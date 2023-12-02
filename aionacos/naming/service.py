@@ -72,7 +72,7 @@ class NamingService(object):
         instances: t.List[Instance],
         group_name: str = cst.DEFAULT_GROUP,
     ):
-        # todo why
+        # todo support batch register, for what scenario
         pass
 
     async def get_all_instances(
