@@ -1,6 +1,6 @@
 import logging
 
-from . import properties
+from . import conf
 
 
 def get_logger(prefix: str = ""):
@@ -10,7 +10,7 @@ def get_logger(prefix: str = ""):
     handler.setFormatter(fmt)
     _logger.addHandler(handler)
     _logger.propagate = False
-    _logger.setLevel(properties.log_level)
+    _logger.setLevel(conf.log_level)
     return _logger
 
 

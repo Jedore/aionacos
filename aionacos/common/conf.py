@@ -1,10 +1,15 @@
 import logging
-from os import getenv, getcwd, path
+from os import getenv
+from pathlib import Path
+
+base_dir = Path(__file__).absolute().parent.parent
 
 server_addr = getenv("NACOS_SERVER_ADDR", "localhost:8848")
-encode = getenv("NACOS_ENCODE")
+encode = getenv("NACOS_ENCODE", "utf8")
 log_level = logging.getLevelName(getenv("NACOS_LOG_LEVEL", "DEBUG"))
-cache_dir = getenv("NACOS_CACHE_DIR", path.join(getcwd(), "nacos_cache"))
+cache_dir = getenv("NACOS_CACHE_DIR")
+# todo
+cache_dir = Path(cache_dir) if cache_dir else base_dir / '.nacos'
 
 auth_enable = getenv("NACOS_AUTH_ENABLE") == "true"
 username = getenv("NACOS_USERNAME")

@@ -1,8 +1,8 @@
 from typing import List
 
 from .pojo import ServiceInfo
-from .._common.response import Response
-from .._common.response_code import ResponseCode
+from ..common.response import Response
+from ..common.response_code import ResponseCode
 
 __all__ = [
     "InstanceResponse",

@@ -2,7 +2,7 @@ import pickle
 from pathlib import Path
 
 from .pojo import ServiceInfo
-from .._common.log import logger
+from ..common.log import logger
 
 
 def make_sure_cache_dir_exists(cache_dir: Path):

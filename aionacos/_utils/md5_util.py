@@ -1,6 +1,6 @@
 from hashlib import md5
 
-from .._common import constants
+from ..common import constants
 
 
 def md5_hex(value: str, encode: str):

@@ -5,25 +5,25 @@ from . import disk_cache
 from .event import InstanceChangeEvent
 from .pojo import ServiceInfo
 from .utils import NamingUtils
-from .._common import properties
-from .._common.center import NOTIFY_CENTER
-from .._common.log import logger
+from ..common import conf
+from ..common.center import NOTIFY_CENTER
+from ..common.log import logger
 
 
 class ServiceInfoHolder(object):
     def __init__(self, notifier_event_scop: str):
-        self.cache_dir = Path.cwd() / "nacos" / "naming"
+        self._cache_dir = conf.base_dir / "naming"
 
-        is_load_cache = properties.naming_load_cache_at_start
+        is_load_cache = conf.naming_load_cache_at_start
 
         if is_load_cache:
-            self._service_info_map = disk_cache.read(self.cache_dir)
+            self._service_info_map = disk_cache.read(self._cache_dir)
         else:
             self._service_info_map = {}
 
-        self.failover_reactor = FailoverReactor(self, self.cache_dir)
+        self.failover_reactor = FailoverReactor(self, self._cache_dir)
 
-        self.push_empty_protection = properties.naming_push_empty_protection
+        self.push_empty_protection = conf.naming_push_empty_protection
 
         self.notifier_event_scope = notifier_event_scop
 
@@ -105,7 +105,7 @@ class ServiceInfoHolder(object):
                     service_info.hosts,
                 )
             )
-            disk_cache.write(service_info, self.cache_dir)
+            disk_cache.write(service_info, self._cache_dir)
         else:
             logger.debug("[Naming] service info not changed")
 

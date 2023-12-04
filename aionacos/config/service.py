@@ -1,26 +1,30 @@
+from pathlib import Path
+
+from . import local_info
 from .client import ConfigClient
 from .filter import ConfigFilterChainManager, ConfigFilter
 from .listener import Listener
-from .local_info_processor import LocalConfigInfoProcessor
 from .response import *
-from .._common import properties, constants as cst
-from .._common.exceptions import NacosException
-from .._common.log import logger
-from .._common.server_manager import ServerManager
+from ..common import conf, constants as cst
+from ..common.exceptions import NacosException
+from ..common.log import logger
+from ..common.server_manager import ServerManager
 
 
 class ConfigService(object):
-    def __init__(self):
-        self._filter_chain_manager = None
-        # todo namespace
-        self._namespace = properties.config_namespace
-
+    def __init__(self, namespace: str = None):
+        self._namespace = namespace or conf.config_namespace
+        # todo filter chain
         self._filter_chain_manager = ConfigFilterChainManager()
-
+        self._cache_dir = conf.cache_dir / "config"
         server_manager = ServerManager()
-        # todo server update; ignore
-
-        self._client = ConfigClient(self._filter_chain_manager, server_manager)
+        # todo server list update
+        self._client = ConfigClient(
+            self._filter_chain_manager,
+            server_manager,
+            self._namespace,
+            self._cache_dir,
+        )
 
     async def start(self):
         logger.info("[Config] service start")
@@ -31,8 +35,9 @@ class ConfigService(object):
         self._client.stop()
 
     async def get_config(self, data_id: str, group: str = cst.DEFAULT_GROUP):
-        # todo
-        content = LocalConfigInfoProcessor.get_failover()
+        content = await local_info.get_snapshot(
+            data_id, group, self._namespace, self._cache_dir
+        )
         if content is not None:
             return content
 
@@ -42,7 +47,7 @@ class ConfigService(object):
             )
             # todo filter
             return rsp.content
-        except NacosException as e:
+        except NacosException as err:
             pass
 
     async def get_config_and_sign_listener(
@@ -80,8 +85,8 @@ class ConfigService(object):
     ):
         self._client.remove_tenant_listener(data_id, group, listener)
 
-    def get_server_status(self):
-        return "UP" if self._client.server_health() else "DOWN"
-
     def add_config_filter(self, filter_: ConfigFilter):
         pass
+
+    def get_server_status(self):
+        return "UP" if self._client.server_health() else "DOWN"

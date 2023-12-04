@@ -1,7 +1,7 @@
 import enum
 
-from .._common.event import SlowEvent
-from .._common.utils import Serializable
+from ..common.event import SlowEvent
+from ..common.utils import Serializable
 
 
 class ChangeType(enum.IntEnum):

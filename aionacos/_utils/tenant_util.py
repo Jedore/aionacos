@@ -1,6 +1,6 @@
 from os import getenv
 
-from .._common import property_key_const as pkc
+from ..common import property_key_const as pkc
 
 TENANT_ID = "tenant.id"
 

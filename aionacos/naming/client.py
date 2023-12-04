@@ -11,13 +11,13 @@ from .service_info_holder import ServiceInfoHolder
 from .subscriber import InstanceChangeNotifier
 from .utils import NamingUtils
 from .._auth.security_proxy import SecurityProxy
-from .._common import GrpcClient
-from .._common.exceptions import NacosException
-from .._common.listener import ConnectionEventListener
-from .._common.log import logger
-from .._common.response import ResponseType
-from .._common.selector import AbstractSelector
-from .._common.server_manager import ServerManager
+from ..common import GrpcClient
+from ..common.exceptions import NacosException
+from ..common.listener import ConnectionEventListener
+from ..common.log import logger
+from ..common.response import ResponseType
+from ..common.selector import AbstractSelector
+from ..common.server_manager import ServerManager
 
 NAMING = "Naming"
 
@@ -47,8 +47,10 @@ class NamingClient(object):
     async def start(self):
         logger.debug("[Naming] client start")
         self._security_proxy.refresh_auth_task()
-        self._grpc.reg_conn_listener(self._redo)
-        self._grpc.reg_req_handler(NamingPushRequestHandler(self._service_info_holder))
+        self._grpc.register_connection_listener(self._redo)
+        self._grpc.register_request_handler(
+            NamingPushRequestHandler(self._service_info_holder)
+        )
         await self._grpc.start()
 
     def stop(self):
@@ -64,7 +66,7 @@ class NamingClient(object):
             return rsp
 
         # when request failed
-        logger.error("[Naming] req failed: %s, %s", req, rsp)
+        logger.error("[Naming] request failed: %s, %s", req, rsp)
         if throw:
             NacosException(rsp.errorCode, rsp.message)
 

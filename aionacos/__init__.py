@@ -1,4 +1,4 @@
-from ._common.event import Event
+from .common.event import Event
 from .config.event import ConfigChangeEvent
 from .config.listener import AbstractConfigChangeListener
 from .config.service import ConfigService

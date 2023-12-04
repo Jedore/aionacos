@@ -1,6 +1,6 @@
 from .pojo import ServiceInfo
 from .utils import Chooser
-from .._common.log import logger
+from ..common.log import logger
 
 
 class Balancer(object):

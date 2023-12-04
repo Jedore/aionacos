@@ -1,8 +1,8 @@
 from .request import NotifySubscriberRequest
 from .response import NotifySubscriberResponse
 from .service_info_holder import ServiceInfoHolder
-from .._common.request import Request
-from .._common.server_req_handler import ServerRequestHandler
+from ..common.request import Request
+from ..common.server_req_handler import ServerRequestHandler
 
 
 class NamingPushRequestHandler(ServerRequestHandler):

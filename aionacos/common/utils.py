@@ -1,5 +1,4 @@
 from json import JSONEncoder
-from typing import Any
 
 
 class Serializable(object):
@@ -26,7 +25,7 @@ class Serializable(object):
 
 
 class NacosJSONEncoder(JSONEncoder):
-    def default(self, o: Any) -> Any:
+    def default(self, o: any) -> any:
         if isinstance(o, Serializable):
             return o.dict()
         return super().default(o)

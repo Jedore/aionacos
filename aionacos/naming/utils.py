@@ -3,8 +3,8 @@ import re
 from typing import List
 
 from .pojo import Instance
-from .._common import constants as cst
-from .._common.exceptions import NacosException
+from ..common import constants as cst
+from ..common.exceptions import NacosException
 
 
 class NamingUtils(object):

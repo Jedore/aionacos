@@ -1,9 +1,9 @@
-from . import properties, constants as cst
+from . import conf, constants as cst
 
 
 class ServerManager(object):
     def __init__(self):
-        server_list = properties.server_addr.split(cst.SERVER_ADDR_SPLITER)
+        server_list = conf.server_addr.split(cst.SERVER_ADDR_SPLITER)
         self._server_list = []
         self._server_urls = []
         for item in server_list:
@@ -34,10 +34,6 @@ class ServerManager(object):
         return self._cur_server
 
     def cur_server(self):
-        """
-        Get current server address
-        """
-
         if not self._cur_server:
             self._cur_server = next(self.iterator)
         return self._cur_server
@@ -54,3 +50,11 @@ class ServerManager(object):
 
     def get_server_urls(self):
         return self._server_urls
+
+    @property
+    def name(self):
+        # todo
+        return 'default'
+
+    def start(self):
+        ...

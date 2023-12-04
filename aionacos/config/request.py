@@ -1,8 +1,8 @@
 from typing import List
 
-from .._common import constants as const
-from .._common.request import Request, ServerRequest
-from .._common.utils import Serializable
+from ..common import constants as const
+from ..common.request import Request, ServerRequest
+from ..common.utils import Serializable
 
 __all__ = [
     "AbstractConfigRequest",

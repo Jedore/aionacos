@@ -2,8 +2,8 @@ import asyncio
 from typing import List, Optional
 
 from .plugin_manager import AuthPluginManager
-from .._common import properties
-from .._common.log import logger
+from ..common import conf
+from ..common.log import logger
 
 
 class SecurityProxy(object):
@@ -37,7 +37,7 @@ class SecurityProxy(object):
         return {}
 
     def refresh_auth_task(self):
-        if not properties.auth_enable:
+        if not conf.auth_enable:
             logger.warning("[%s] auth disabled", self._name)
             return
 

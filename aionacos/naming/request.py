@@ -1,5 +1,5 @@
-from .._common import constants as cst
-from .._common.request import Request, ServerRequest
+from ..common import constants as cst
+from ..common.request import Request, ServerRequest
 from ..naming.pojo import Instance, ServiceInfo
 
 __all__ = [

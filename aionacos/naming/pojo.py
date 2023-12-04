@@ -2,9 +2,9 @@ from typing import List
 from urllib.parse import quote_plus
 
 from . import preserved_metatdata_keys as pmk
-from .._common import constants as cst
-from .._common.payload import SlotsMeta
-from .._common.utils import Serializable
+from ..common import constants as cst
+from ..common.payload import SlotsMeta
+from ..common.utils import Serializable
 
 
 class Instance(Serializable, metaclass=SlotsMeta):

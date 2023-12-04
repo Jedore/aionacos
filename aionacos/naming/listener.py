@@ -1,6 +1,6 @@
 from abc import ABCMeta
 
-from .._common.event import Event
+from ..common.event import Event
 
 
 class EventListener(metaclass=ABCMeta):

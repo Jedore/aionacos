@@ -5,8 +5,8 @@ from .cache_data import CacheData
 from .request import *
 from .response import *
 from .. import _utils
-from .._common.request import Request
-from .._common.server_req_handler import ServerRequestHandler
+from ..common.request import Request
+from ..common.server_req_handler import ServerRequestHandler
 
 
 class ConfigPushRequestHandler(ServerRequestHandler):
@@ -27,5 +27,5 @@ class ConfigPushRequestHandler(ServerRequestHandler):
                 self._notify_listen_config()
             return ConfigChangeNotifyResponse()
         elif isinstance(req, ClientConfigMetricRequest):
-            # todo
+            # todo metric request
             return ClientConfigMetricResponse()

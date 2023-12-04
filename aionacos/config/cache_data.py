@@ -10,9 +10,9 @@ from .listener import (
     AbstractSharedListener,
     AbstractConfigChangeListener,
 )
-from .._common import constants as const
-from .._common.exceptions import NacosException
-from .._common.log import logger
+from ..common import constants as const
+from ..common.exceptions import NacosException
+from ..common.log import logger
 from .._utils import md5_util, timestamp
 
 

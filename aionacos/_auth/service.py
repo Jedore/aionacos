@@ -4,9 +4,9 @@ from typing import Optional
 import httpx
 
 from . import constants as const
-from .._common import properties
-from .._common.log import logger
 from .._utils import timestamp
+from ..common import conf
+from ..common.log import logger
 
 
 class AuthService(metaclass=ABCMeta):

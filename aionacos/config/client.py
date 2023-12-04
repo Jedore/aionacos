@@ -1,7 +1,9 @@
 import asyncio
 import typing as t
+from pathlib import Path
 
 from . import group_key
+from . import local_info
 from .cache_data import CacheData
 from .filter import ConfigFilterChainManager
 from .listener import Listener
@@ -10,18 +12,18 @@ from .request import *
 from .response import *
 from .. import _utils
 from .._auth.security_proxy import SecurityProxy
-from .._common import (
-    properties,
+from .._utils import tenant_util, md5_util
+from ..common import (
+    conf,
     constants as cst,
     GrpcClient,
     ConnectionEventListener,
 )
-from .._common.exceptions import NacosException
-from .._common.log import logger
-from .._common.request import Request
-from .._common.response import ResponseType
-from .._common.server_manager import ServerManager
-from .._utils import tenant_util, md5_util
+from ..common.exceptions import NacosException
+from ..common.log import logger
+from ..common.request import Request
+from ..common.response import ResponseType
+from ..common.server_manager import ServerManager
 
 NOTIFY_HEADER = "notify"
 CONFIG_INFO_HEADER = "exConfigInfo"
@@ -42,11 +44,13 @@ class ConfigClient(object):
         self,
         chain_manager: ConfigFilterChainManager,
         server_manager: ServerManager,
+        namespace: str,
+        cache_dir: Path,
     ):
-        self._encode = properties.encode or cst.ENCODE
-        self._tenant = properties.config_namespace
-        # todo security proxy
-
+        self._server_manager = server_manager
+        self._encode = conf.encode or cst.ENCODE
+        self._namespace = namespace
+        self._cache_dir = cache_dir
         self._listen_execute_bell = asyncio.Queue(maxsize=1)
         self._last_all_sync_time = _utils.timestamp()
 
@@ -54,7 +58,7 @@ class ConfigClient(object):
             cst.LABEL_SOURCE: cst.LABEL_SOURCE_SDK,
             cst.LABEL_MODULE: cst.LABEL_MODULE_CONFIG,
         }
-        self._grpc = GrpcClient(CONFIG, server_manager, labels)
+        self._grpc = GrpcClient(CONFIG, self._server_manager, labels)
         self._chain_manager = chain_manager
         self._cache_map: t.Dict[str, CacheData] = {}
         self._security_proxy = SecurityProxy(CONFIG, server_manager.get_server_urls())
@@ -68,10 +72,10 @@ class ConfigClient(object):
     async def start(self):
         logger.debug("[Config] client start")
         self._security_proxy.refresh_auth_task()
-        self._grpc.reg_req_handler(
+        self._grpc.register_request_handler(
             ConfigPushRequestHandler(self.notify_listen_config, self._cache_map)
         )
-        self._grpc.reg_conn_listener(ConfigConnectionListener(self))
+        self._grpc.register_connection_listener(self._redo_service)
         # todo server list change event
         await self._grpc.start()
         await asyncio.sleep(3)
@@ -96,7 +100,7 @@ class ConfigClient(object):
             NacosException(rsp.errorCode, rsp.message)
 
     def add_listeners(self, data_id: str, group: str, listeners: t.List[Listener]):
-        cache = self.add_cache_data_if_absent(data_id, group)
+        cache = self.add_cache_data(data_id, group)
 
         for listener in listeners:
             cache.add_listener(listener)
@@ -119,7 +123,7 @@ class ConfigClient(object):
     def add_tenant_listeners(
         self, data_id: str, group: str, listeners: t.List[Listener]
     ):
-        cache = self.add_cache_data_if_absent(data_id, group, self._tenant)
+        cache = self.add_cache_data(data_id, group, self._namespace)
 
         for listener in listeners:
             cache.add_listener(listener)
@@ -143,24 +147,27 @@ class ConfigClient(object):
         pass
 
     def remove_tenant_listener(self, data_id: str, group: str, listener: Listener):
-        cache = self.get_cache(data_id, group, self._tenant)
+        cache = self.get_cache(data_id, group, self._namespace)
         if cache:
             cache.remove_listener(listener)
             if not cache.listeners:
                 cache.is_sync_with_server = False
-
                 self.notify_listen_config()
 
-    def add_cache_data_if_absent(self, data_id: str, group: str, tenant: str = ""):
+    def add_cache_data(self, data_id: str, group: str, tenant: str = ""):
         cache = self.get_cache(data_id, group, tenant)
         if cache:
             return cache
 
         key = group_key.get_key_tenant(data_id, group, tenant)
-        cache = CacheData(self._chain_manager, "name", data_id, group, tenant=tenant)
-
-        self._cache_map[key] = self._cache_map.get(key) or cache
-
+        cache = CacheData(
+            self._chain_manager,
+            self._server_manager.name,
+            data_id,
+            group,
+            tenant=tenant,
+        )
+        self._cache_map[key] = cache
         return cache
 
     def remove_cache(self, data_id: str, group: str, tenant: str):
@@ -188,20 +195,28 @@ class ConfigClient(object):
 
         rsp: ConfigQueryResponse = await self._req2server(req)
         if rsp.success:
+            await local_info.save_snapshot(
+                data_id, group, tenant, self._cache_dir, rsp.content
+            )
+            await local_info.save_encrypt_snapshot(
+                data_id, group, tenant, self._cache_dir, rsp.encryptedDataKey
+            )
             rsp.contentType = rsp.contentType or "text"
-            # todo save snapshot encrypted
             return rsp
         elif rsp.errorCode == ConfigQueryResponse.CONFIG_NOT_FOUND:
-            # todo save snapshot encrypted
-            pass
+            await local_info.save_snapshot(
+                data_id, group, tenant, self._cache_dir, None
+            )
+            await local_info.save_encrypt_snapshot(
+                data_id, group, tenant, self._cache_dir, None
+            )
+            return rsp
         elif rsp.errorCode == ConfigQueryResponse.CONFIG_QUERY_CONFLICT:
-            # todo CONFIG_QUERY_CONFLICT
             pass
         else:
-            # todo other error
             pass
 
-        logger.error("[Config] query config failed: %s, %s", rsp, req)
+        logger.error("[Config] query config failed: %s, %s", req, rsp)
         raise NacosException(rsp.errorCode, msg=rsp.message)
 
     async def publish_config(
@@ -305,10 +320,10 @@ class ConfigClient(object):
             # do nothing
             pass
         except Exception as err:
-            logger.error("[Config] put _listen_execute_bell queue failed: %s", err)
+            logger.error("[Config] notify listen config failed: %s", err)
 
     async def listen_config(self):
-        logger.debug("[Config] listen config")
+        # logger.debug("[Config] listen config")
 
         try:
             listen_caches: t.List[CacheData] = []
@@ -382,8 +397,8 @@ class ConfigClient(object):
 
             if has_changed_keys:
                 self.notify_listen_config()
-            else:
-                logger.debug("[Config] listen config, no changed")
+            # else:
+            #     logger.debug("[Config] listen config, no changed")
         except Exception as err:
             logger.error("[Config] listen config failed: %s", err)
 
@@ -399,11 +414,6 @@ class ConfigClient(object):
 
     def server_health(self):
         return self._grpc.is_running()
-
-
-class ConfigConnectionListener(ConnectionEventListener):
-    def __init__(self, client: ConfigClient):
-        self._client = client
 
 
 class ConfigRedoService(ConnectionEventListener):

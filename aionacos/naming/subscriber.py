@@ -4,7 +4,7 @@ from aionacos.naming.event import InstanceChangeEvent
 from aionacos.naming.listener import EventListener
 from aionacos.naming.pojo import ServiceInfo
 from aionacos.naming.utils import NamingUtils
-from .._common.subscriber import Subscriber
+from ..common.subscriber import Subscriber
 
 
 class InstanceChangeNotifier(Subscriber):

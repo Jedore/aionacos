@@ -9,15 +9,15 @@ from .pojo import Instance, ServiceInfo
 from .service_info_holder import ServiceInfoHolder
 from .subscriber import InstanceChangeNotifier
 from .utils import NamingUtils
-from .._common import properties, constants as cst
-from .._common.center import NOTIFY_CENTER
-from .._common.log import logger
-from .._common.selector import AbstractSelector
+from ..common import conf, constants as cst
+from ..common.center import NOTIFY_CENTER
+from ..common.log import logger
+from ..common.selector import AbstractSelector
 
 
 class NamingService(object):
     def __init__(self):
-        self.namespace = properties.naming_namespace or cst.DEFAULT_NAMESPACE_ID
+        self.namespace = conf.naming_namespace or cst.DEFAULT_NAMESPACE_ID
         self._notifier_event_scope = str(uuid4())
         self._change_notifier = InstanceChangeNotifier(self._notifier_event_scope)
 

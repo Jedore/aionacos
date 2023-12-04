@@ -174,14 +174,14 @@ class GrpcClient(object):
         self._last_active_time: int = timestamp()  # second
         # todo use dict
         self._ser_req_handlers: t.List[ServerRequestHandler] = []
-        self._conn_event_listeners: t.List[ConnectionEventListener] = []
+        self._connection_listeners: t.List[ConnectionEventListener] = []
         self._switch_queue: asyncio.Queue[ReconnectCxt] = asyncio.Queue(maxsize=1)
         self._conn_event_queue: asyncio.Queue[ConnectionEvent] = asyncio.Queue()
 
         self._status = GrpcStatus.INITIALIZING
 
         self._tasks: t.List[asyncio.Task] = []
-        self._handle_ser_req_task: t.Optional[asyncio.Task] = None
+        self._server_request_task: t.Optional[asyncio.Task] = None
 
     @property
     def name(self):
@@ -222,8 +222,8 @@ class GrpcClient(object):
         self.set_starting()
 
         # register request handlers.
-        self.reg_req_handler(ClientDetectionRequestHandler())
-        self.reg_req_handler(ConnectResetRequestHandler(self))
+        self.register_request_handler(ClientDetectionRequestHandler())
+        self.register_request_handler(ConnectResetRequestHandler(self))
 
         # Try to connect to the same server multi times.
         retry_times = self.RETRY_TIMES
@@ -326,12 +326,12 @@ class GrpcClient(object):
     def _set_active_time(self):
         self._last_active_time = timestamp()
 
-    def reg_req_handler(self, handler: ServerRequestHandler):
+    def register_request_handler(self, handler: ServerRequestHandler):
         self._ser_req_handlers.append(handler)
         # logger.debug("[%s] req handler: %s", self._name, handler.name)
 
-    def reg_conn_listener(self, listener: ConnectionEventListener):
-        self._conn_event_listeners.append(listener)
+    def register_connection_listener(self, listener: ConnectionEventListener):
+        self._connection_listeners.append(listener)
         # logger.debug("[%s] connection listener: %s", self._name, listener.name)
 
     async def request(
@@ -423,13 +423,13 @@ class GrpcClient(object):
         except Exception as err:
             logger.error("[%s] put _switch_queue failed: %s", self._name, err)
 
-    async def _handle_ser_req(self):
+    async def _handle_server_request(self):
         # logger.debug("[%s] wait server req.", self._name)
 
         while self.is_running():
             try:
                 req = await self._conn.read_ser_req()
-                logger.debug("[%s] server req: %s.", self._name, req)
+                logger.debug("[%s] server request: %s.", self._name, req)
 
                 if req is None:
                     continue
@@ -439,11 +439,11 @@ class GrpcClient(object):
                     if rsp is not None:
                         rsp.requestId = req.requestId
                         await self._conn.bi_response(rsp)
-                        logger.debug("[%s] rsp server: %s", self._name, rsp)
+                        logger.debug("[%s] respond server: %s", self._name, rsp)
                         break
             except grpc.aio.AioRpcError as err:
                 error = f"{err.code()} {err.details()}"
-                logger.debug("[%s] _handle_ser_req failed: %s", self._name, error)
+                logger.debug("[%s] handle server request failed: %s", self._name, error)
                 # todo why
                 await asyncio.sleep(self.KEEP_ALIVE_TIME)
 
@@ -600,9 +600,9 @@ class GrpcClient(object):
 
     async def _notify_connected(self):
         # logger.debug("[%s] notify connected.", self._name)
-        self._handle_ser_req_task = asyncio.create_task(self._handle_ser_req())
+        self._server_request_task = asyncio.create_task(self._handle_server_request())
 
-        for listener in self._conn_event_listeners:
+        for listener in self._connection_listeners:
             try:
                 listener.on_connected()
             except Exception as err:
@@ -610,11 +610,11 @@ class GrpcClient(object):
 
     async def _notify_disconnected(self):
         # logger.debug("[%s] notify disconnected.", self._name)
-        if self._handle_ser_req_task and not self._handle_ser_req_task.done():
-            self._handle_ser_req_task.cancel()
-            self._handle_ser_req_task = None
+        if self._server_request_task and not self._server_request_task.done():
+            self._server_request_task.cancel()
+            self._server_request_task = None
 
-        for listener in self._conn_event_listeners:
+        for listener in self._connection_listeners:
             try:
                 listener.on_disconnected()
             except Exception as err:

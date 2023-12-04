@@ -1,6 +1,6 @@
 from typing import List
 
-from .._common.response import Response
+from ..common.response import Response
 from ..config.request import ConfigListenContext
 
 __all__ = [

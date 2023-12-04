@@ -1,7 +1,7 @@
 from typing import List
 
 from .pojo import Instance
-from .._common.event import Event, SlowEvent
+from ..common.event import Event, SlowEvent
 
 
 class InstanceChangeEvent(Event):
