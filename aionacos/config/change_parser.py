@@ -4,6 +4,9 @@ from abc import ABCMeta
 from .event import ConfigChangeItem, ChangeType
 
 
+# todo use metadata like payload registry
+
+
 class AbstractConfigChangeParse(metaclass=ABCMeta):
     config_type = ""
 
@@ -19,31 +22,30 @@ class AbstractConfigChangeParse(metaclass=ABCMeta):
     @staticmethod
     def filter_change_data(old_config: dict, new_config: dict):
         changed_map = {}
-        for key, value in old_config.items():
+        for key, old_value in old_config.items():
             if key not in new_config:
                 item = ConfigChangeItem(
-                    key=key, old_value=value, type_=ChangeType.DELETED
+                    key=key, old_value=old_value, type_=ChangeType.DELETED
                 )
                 changed_map[key] = item
             else:
                 new_value = new_config.get(key)
-                if value == new_value:
+                if old_value == new_value:
                     continue
                 item = ConfigChangeItem(
                     key=key,
-                    old_value=value,
+                    old_value=old_value,
                     new_value=new_value,
                     type_=ChangeType.MODIFIED,
                 )
                 changed_map[key] = item
 
-        for key, value in new_config.items():
+        for key, new_value in new_config.items():
             if key not in old_config:
                 item = ConfigChangeItem(
-                    key=key, new_value=value, type_=ChangeType.ADDED
+                    key=key, new_value=new_value, type_=ChangeType.ADDED
                 )
                 changed_map[key] = item
-
         return changed_map
 
 

@@ -1,7 +1,8 @@
 import asyncio
 import typing as t
-from os import getenv
+from pathlib import Path
 
+from . import local_info, cache_dir as cd
 from .change_handler import ConfigChangeHandler
 from .event import ConfigChangeEvent
 from .filter import ConfigFilterChainManager, ConfigResponse
@@ -10,10 +11,9 @@ from .listener import (
     AbstractSharedListener,
     AbstractConfigChangeListener,
 )
-from ..common import constants as const
-from ..common.exceptions import NacosException
-from ..common.log import logger
 from .._utils import md5_util, timestamp
+from ..common import constants as const, conf
+from ..common.log import logger
 
 
 class ListenerWarp(object):
@@ -35,6 +35,7 @@ class CacheData(object):
         data_id: str,
         group: str,
         tenant: str = "",
+        cache_dir: Path = cd,
     ):
         self.chain_manager = chain_manager
         self.name = name
@@ -44,6 +45,7 @@ class CacheData(object):
         self.listeners: t.List[ListenerWarp] = []
         self.type = ""
         self.last_modified_time = timestamp()  # second
+        self._cache_dir = cache_dir
 
         # 1.first add listener, default is false; need to check.
         # 2.receive config change notify, set false; need to check.
@@ -56,27 +58,27 @@ class CacheData(object):
         self.content = None
         self.md5 = None
 
-        # todo
-        self._init_snapshot = getenv("nacos.cache.data.init.snapshot", "true") == "true"
-        if self._init_snapshot:
-            self.content = self.load_cache_data_from_disk()
-            self.encrypted_data_key = self.load_encrypted_data_key_from_disk()
+        if conf.config_init_snapshot:
+            self.content = local_info.get_snapshot(
+                self.data_id, self.group, self.tenant, self._cache_dir
+            )
+            self.encrypted_data_key = local_info.get_encrypt_snapshot(
+                self.data_id, self.group, self.tenant, self._cache_dir
+            )
             self.md5 = self.get_md5()
 
         self.is_use_local_config = False
-
-        # todo init snapshot
 
     def set_content(self, content: str):
         self.content = content
         self.md5 = self.get_md5()
 
     def add_listener(self, listener: Listener):
-        if listener is None:
-            raise NacosException(NacosException.INVALID_PARAM, msg="listener is none")
+        if not listener:
+            return
 
         if isinstance(listener, AbstractConfigChangeListener):
-            # todo
+            # todo config change listener; filter
             wrap = ListenerWarp(listener, self.md5)
         else:
             wrap = ListenerWarp(listener, self.md5)
@@ -84,8 +86,9 @@ class CacheData(object):
         self.listeners.append(wrap)
 
     def remove_listener(self, listener: Listener):
-        if listener is None:
-            raise NacosException(NacosException.INVALID_PARAM, msg="listener is none")
+        if not listener:
+            return
+
         wrap = ListenerWarp(listener)
         try:
             self.listeners.remove(wrap)
@@ -93,11 +96,8 @@ class CacheData(object):
             pass
 
     def check_listener_md5(self):
-        """
-        Check listener's md5 and cache's md5.
-        """
-        for wrap in self.listeners:  # type
-            if self.md5 != wrap.last_call_md5:
+        for listener_wrap in self.listeners:
+            if self.md5 != listener_wrap.last_call_md5:
                 # if not same, notify listener
                 self._notify_listener(
                     self.data_id,
@@ -106,7 +106,7 @@ class CacheData(object):
                     self.type,
                     self.md5,
                     self.encrypted_data_key,
-                    wrap,
+                    listener_wrap,
                 )
 
     def check_listener_md5_consistent(self):
@@ -125,17 +125,19 @@ class CacheData(object):
         encrypted_data_key: str,
         wrap: ListenerWarp,
     ):
-        listener = wrap.listener
         if wrap.in_notifying:
             return
 
+        listener = wrap.listener
+
         async def _notify():
-            logger.debug("[Config] Notify listeners changed configs")
+            # logger.debug("[Config] notify listeners changed configs")
             try:
                 if isinstance(listener, AbstractSharedListener):
                     # todo shared listener
                     pass
 
+                # todo delete response ? for filter
                 rsp = ConfigResponse(
                     dataId=data_id,
                     group=group,
@@ -144,7 +146,7 @@ class CacheData(object):
                 )
                 # todo filter
                 wrap.in_notifying = True
-                listener.receive_config_info(rsp.content)
+                listener.receive_config_info(content)
                 if isinstance(listener, AbstractConfigChangeListener):
                     data = ConfigChangeHandler.parse_change_data(
                         wrap.last_content, content, type_
@@ -153,23 +155,14 @@ class CacheData(object):
                         event = ConfigChangeEvent(data)
                         listener.receive_config_change(event)
                         wrap.last_content = content
-
                 wrap.last_call_md5 = md5
-            except Exception as e:
-                logger.error("[Config] Notify listeners changed config failed: %s", e)
+
+            except Exception as err:
+                logger.error("[Config] notify listeners changed config failed: %s", err)
             finally:
-                # todo
                 wrap.in_notifying = False
 
         asyncio.create_task(_notify())
-
-    def load_cache_data_from_disk(self):
-        # todo
-        pass
-
-    def load_encrypted_data_key_from_disk(self):
-        # todo
-        pass
 
     def get_md5(self):
         return md5_util.md5_hex(self.content, const.ENCODE)

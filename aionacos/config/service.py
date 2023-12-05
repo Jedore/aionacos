@@ -1,6 +1,4 @@
-from pathlib import Path
-
-from . import local_info
+from . import cache_dir, local_info
 from .client import ConfigClient
 from .filter import ConfigFilterChainManager, ConfigFilter
 from .listener import Listener
@@ -16,14 +14,13 @@ class ConfigService(object):
         self._namespace = namespace or conf.config_namespace
         # todo filter chain
         self._filter_chain_manager = ConfigFilterChainManager()
-        self._cache_dir = conf.cache_dir / "config"
         server_manager = ServerManager()
         # todo server list update
         self._client = ConfigClient(
             self._filter_chain_manager,
             server_manager,
             self._namespace,
-            self._cache_dir,
+            cache_dir,
         )
 
     async def start(self):
@@ -35,9 +32,7 @@ class ConfigService(object):
         self._client.stop()
 
     async def get_config(self, data_id: str, group: str = cst.DEFAULT_GROUP):
-        content = await local_info.get_snapshot(
-            data_id, group, self._namespace, self._cache_dir
-        )
+        content = local_info.get_snapshot(data_id, group, self._namespace, cache_dir)
         if content is not None:
             return content
 
@@ -53,7 +48,7 @@ class ConfigService(object):
     async def get_config_and_sign_listener(
         self, data_id: str, listener: Listener, group: str = cst.DEFAULT_GROUP
     ):
-        # todo
+        # todo get and sign
         pass
 
     async def publish_config(

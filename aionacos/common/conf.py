@@ -8,8 +8,8 @@ server_addr = getenv("NACOS_SERVER_ADDR", "localhost:8848")
 encode = getenv("NACOS_ENCODE", "utf8")
 log_level = logging.getLevelName(getenv("NACOS_LOG_LEVEL", "DEBUG"))
 cache_dir = getenv("NACOS_CACHE_DIR")
-# todo
-cache_dir = Path(cache_dir) if cache_dir else base_dir / '.nacos'
+# todo home dir
+cache_dir = Path(cache_dir) if cache_dir else base_dir / ".nacos"
 
 auth_enable = getenv("NACOS_AUTH_ENABLE") == "true"
 username = getenv("NACOS_USERNAME")
@@ -27,3 +27,5 @@ naming_load_cache_at_start = (
 naming_push_empty_protection = (
     getenv("NACOS_NAMING_PUSH_EMPTY_PROTECTION", "true") == "true"
 )
+
+config_init_snapshot = getenv("NACOS_CONFIG_INIT_SNAPSHOT", "true") == "true"

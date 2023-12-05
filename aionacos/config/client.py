@@ -2,8 +2,7 @@ import asyncio
 import typing as t
 from pathlib import Path
 
-from . import group_key
-from . import local_info
+from . import group_key, local_info
 from .cache_data import CacheData
 from .filter import ConfigFilterChainManager
 from .listener import Listener
@@ -58,7 +57,7 @@ class ConfigClient(object):
             cst.LABEL_SOURCE: cst.LABEL_SOURCE_SDK,
             cst.LABEL_MODULE: cst.LABEL_MODULE_CONFIG,
         }
-        self._grpc = GrpcClient(CONFIG, self._server_manager, labels)
+        self._grpc_client = GrpcClient(CONFIG, self._server_manager, labels)
         self._chain_manager = chain_manager
         self._cache_map: t.Dict[str, CacheData] = {}
         self._security_proxy = SecurityProxy(CONFIG, server_manager.get_server_urls())
@@ -72,12 +71,12 @@ class ConfigClient(object):
     async def start(self):
         logger.debug("[Config] client start")
         self._security_proxy.refresh_auth_task()
-        self._grpc.register_request_handler(
+        self._grpc_client.register_request_handler(
             ConfigPushRequestHandler(self.notify_listen_config, self._cache_map)
         )
-        self._grpc.register_connection_listener(self._redo_service)
+        self._grpc_client.register_connection_listener(self._redo_service)
         # todo server list change event
-        await self._grpc.start()
+        await self._grpc_client.start()
         await asyncio.sleep(3)
         self._listen_task = asyncio.create_task(self.listen_config_loop())
 
@@ -85,17 +84,17 @@ class ConfigClient(object):
         logger.debug("[Config] client stop")
         if self._listen_task and not self._listen_task.done():
             self._listen_task.cancel()
-        self._grpc.stop()
+        self._grpc_client.stop()
         self._security_proxy.stop()
 
     async def _req2server(self, req: Request, throw: bool = True) -> ResponseType:
         req.headers.update(self._security_proxy.get_identity_context())
-        rsp: ResponseType = await self._grpc.request(req, throw=throw)
+        rsp: ResponseType = await self._grpc_client.request(req, throw=throw)
         if rsp.success:
             return rsp
 
         # when request failed
-        logger.error("[Config] req failed: %s, %s", req, rsp)
+        logger.error("[Config] request failed: %s, %s", req, rsp)
         if throw:
             NacosException(rsp.errorCode, rsp.message)
 
@@ -195,19 +194,17 @@ class ConfigClient(object):
 
         rsp: ConfigQueryResponse = await self._req2server(req)
         if rsp.success:
-            await local_info.save_snapshot(
+            local_info.save_snapshot(
                 data_id, group, tenant, self._cache_dir, rsp.content
             )
-            await local_info.save_encrypt_snapshot(
+            local_info.save_encrypt_snapshot(
                 data_id, group, tenant, self._cache_dir, rsp.encryptedDataKey
             )
             rsp.contentType = rsp.contentType or "text"
             return rsp
         elif rsp.errorCode == ConfigQueryResponse.CONFIG_NOT_FOUND:
-            await local_info.save_snapshot(
-                data_id, group, tenant, self._cache_dir, None
-            )
-            await local_info.save_encrypt_snapshot(
+            local_info.save_snapshot(data_id, group, tenant, self._cache_dir, None)
+            local_info.save_encrypt_snapshot(
                 data_id, group, tenant, self._cache_dir, None
             )
             return rsp
@@ -259,10 +256,7 @@ class ConfigClient(object):
         return rsp.success
 
     async def refresh_content_and_check(self, changed_key: str, notify: bool):
-        """
-
-        notify: no use currently.
-        """
+        # todo notify meaning
         logger.debug("[Config] Refresh content and check md5: %s", changed_key)
 
         try:
@@ -282,7 +276,6 @@ class ConfigClient(object):
             cache.encrypted_data_key = rsp.encryptedDataKey
             cache.set_content(rsp.content)
             cache.type = rsp.contentType or cache.type
-
             cache.check_listener_md5()
         except Exception as err:
             logger.error(
@@ -292,25 +285,22 @@ class ConfigClient(object):
             )
 
     async def listen_config_loop(self):
-        """
-        Read notification from _listen_execute_bell queue,
-        then listen config change when server request or exceed fixed time.
-        """
-        logger.info("[Config] start listen config")
+        # logger.debug("[Config] wait listen config queue")
 
         while True:
             try:
                 await asyncio.wait_for(self._listen_execute_bell.get(), START_INTERVAL)
             except asyncio.TimeoutError:
+                # do nothing
                 pass
             except asyncio.CancelledError:
                 # Stop loop when cancel task.
                 break
             except Exception as err:
-                logger.error("[Config] get _listen_execute_bell queue failed: %s", err)
+                logger.error("[Config] wait listen config queue failed: %s", err)
                 continue
 
-            # get _listen_execute_bell queue success, then listen config.
+            # wait until a queue item or timeout
             await self.listen_config()
 
     def notify_listen_config(self):
@@ -354,18 +344,16 @@ class ConfigClient(object):
                         has_changed_keys = True
 
                     changed_keys = []
-
+                    # Handle changed keys, notify listeners.
                     for config in rsp.changedConfigs:
                         key = group_key.get_key_tenant(
                             config.dataId, config.group, config.tenant
                         )
-
                         changed_keys.append(key)
-
                         is_initializing = self._cache_map.get(key).is_initializing
-
                         await self.refresh_content_and_check(key, not is_initializing)
 
+                    # Handle no changed keys
                     for cache in listen_caches:
                         key = group_key.get_key_tenant(
                             cache.data_id, cache.group, cache.tenant
@@ -374,12 +362,13 @@ class ConfigClient(object):
                             if not cache.listeners:
                                 continue
 
-                            if cache.last_modified_time == _utils.timestamp():
-                                cache.is_sync_with_server = True
+                            # update last modified time
+                            cache.last_modified_time = _utils.timestamp()
+                            cache.is_sync_with_server = True
 
                         cache.is_initializing = False
                 else:
-                    logger.error("[Config] Listen cache failed: %s", rsp)
+                    logger.warning("[Config] listen config failed: %s, %s", req, rsp)
 
             # Remove listen config and cache.
             if remove_listen_caches:
@@ -390,7 +379,9 @@ class ConfigClient(object):
                         if not cache.listeners:
                             self.remove_cache(cache.data_id, cache.group, cache.tenant)
                 else:
-                    logger.error("[Config] remove listen cache failed: %s", rsp)
+                    logger.warning(
+                        "[Config] remove listen config failed: %s, %s", rsp, req
+                    )
 
             if need_all_sync:
                 self._last_all_sync_time = now
@@ -413,28 +404,28 @@ class ConfigClient(object):
         return req
 
     def server_health(self):
-        return self._grpc.is_running()
+        return self._grpc_client.is_running()
 
 
 class ConfigRedoService(ConnectionEventListener):
     def __init__(self, client: ConfigClient):
-        self._client = client
-        self._is_first_connected = True
+        self._config_client = client
+        self._is_first_connect = True
 
     def on_connected(self):
-        self._client.notify_listen_config()
+        self._config_client.notify_listen_config()
         asyncio.create_task(self.run())
         logger.debug("[Config] on connected.")
 
     def on_disconnected(self):
-        for cache in self._client.cache_map.values():
+        for cache in self._config_client.cache_map.values():
             cache.is_sync_with_server = False
         logger.debug("[Config] on disconnected.")
 
     async def run(self):
         # Do not redo when connect firstly.
-        if self._is_first_connected:
-            self._is_first_connected = False
+        if self._is_first_connect:
+            self._is_first_connect = False
             return
 
         logger.debug("[Config] redo service start")

@@ -5,11 +5,9 @@ from ..common.log import logger
 
 
 # todo whether use snapshot
-def get_failover():
-    pass
 
 
-async def save_snapshot(
+def save_snapshot(
     data_id: str, group: str, tenant: str, cache_dir: Path, config: str = None
 ):
     # TODO How to avoid conflicting between multi instances.
@@ -25,7 +23,7 @@ async def save_snapshot(
         logger.warning(f"[Config] store snapshot failed: {file}, {err}")
 
 
-async def get_snapshot(data_id: str, group: str, tenant: str, cache_dir: Path):
+def get_snapshot(data_id: str, group: str, tenant: str, cache_dir: Path):
     file = get_snapshot_file(data_id, group, tenant, cache_dir)
     if not file.exists() or not file.is_file():
         return None
@@ -44,11 +42,7 @@ def get_snapshot_file(data_id: str, group: str, tenant: str, cache_dir: Path):
     return cache_dir / f"{tenant}_{group}_{data_id}.snapshot"
 
 
-def get_encrypt_failover():
-    pass
-
-
-async def save_encrypt_snapshot(
+def save_encrypt_snapshot(
     data_id: str, group: str, tenant: str, cache_dir: Path, encrypt_data_key: str = None
 ):
     # TODO How to avoid conflicting between multi instances.
@@ -64,7 +58,7 @@ async def save_encrypt_snapshot(
         logger.warning(f"[Config] store snapshot failed: {file}, {err}")
 
 
-async def get_encrypt_snapshot(data_id: str, group: str, tenant: str, cache_dir: Path):
+def get_encrypt_snapshot(data_id: str, group: str, tenant: str, cache_dir: Path):
     file = get_encrypt_snapshot_file(data_id, group, tenant, cache_dir)
     if not file.exists() or not file.is_file():
         return None

@@ -45,7 +45,6 @@ class ConfigBatchListenRequest(AbstractConfigRequest):
         super().__init__(**kwargs)
 
         self.listen = listen
-
         self.configListenContexts: List[ConfigListenContext] = []
 
 

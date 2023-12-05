@@ -337,7 +337,6 @@ class GrpcClient(object):
     async def request(
         self, req: Request, timeout: float = cst.READ_TIMEOUT, throw: bool = True
     ) -> ResponseType:
-        # todo exception deal
         retry_times = 0
         t_start = timestamp()
         error = None
@@ -373,7 +372,7 @@ class GrpcClient(object):
                 if wait_reconnect:
                     await asyncio.sleep(min(0.1, timeout / 3))
                 logger.debug(
-                    "[%s] req failed, retry_times: %s, req: %s, error: %s",
+                    "[%s] request failed, retry_times: %s, req: %s, error: %s",
                     self._name,
                     retry_times,
                     req,

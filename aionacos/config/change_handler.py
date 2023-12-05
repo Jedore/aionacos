@@ -2,6 +2,7 @@ from .change_parser import *
 
 
 class ConfigChangeHandler(object):
+    # todo use dict
     parsers = (
         JsonChangeParser(),
         PropertiesChangeParser(),
