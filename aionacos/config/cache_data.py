@@ -11,8 +11,7 @@ from .listener import (
     AbstractSharedListener,
     AbstractConfigChangeListener,
 )
-from .._utils import md5_util, timestamp
-from ..common import constants as const, conf
+from ..common import constants as const, conf, utils
 from ..common.log import logger
 
 
@@ -44,7 +43,7 @@ class CacheData(object):
         self.tenant = tenant
         self.listeners: t.List[ListenerWarp] = []
         self.type = ""
-        self.last_modified_time = timestamp()  # second
+        self.last_modified_time = utils.timestamp()  # second
         self._cache_dir = cache_dir
 
         # 1.first add listener, default is false; need to check.
@@ -67,6 +66,7 @@ class CacheData(object):
             )
             self.md5 = self.get_md5()
 
+        # todo use local config
         self.is_use_local_config = False
 
     def set_content(self, content: str):
@@ -165,4 +165,4 @@ class CacheData(object):
         asyncio.create_task(_notify())
 
     def get_md5(self):
-        return md5_util.md5_hex(self.content, const.ENCODE)
+        return utils.md5_hex(self.content, const.ENCODE)

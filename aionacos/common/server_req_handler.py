@@ -1,12 +1,8 @@
-from abc import ABCMeta
-
+from .payload import SlotsMeta
 from .request import Request
 
 
-class ServerRequestHandler(metaclass=ABCMeta):
-    def __init__(self):
-        pass
-
+class ServerRequestHandler(metaclass=SlotsMeta):
     async def request_reply(self, req: Request):
         raise NotImplementedError()
 

@@ -1,6 +1,7 @@
 import typing as t
 from uuid import uuid4
 
+from . import cache_dir
 from .balancer import Balancer
 from .client import NamingClient
 from .event import InstanceChangeEvent
@@ -24,7 +25,9 @@ class NamingService(object):
         NOTIFY_CENTER.register2publisher(InstanceChangeEvent, 16384)
         NOTIFY_CENTER.register_subscriber(self._change_notifier)
 
-        self._service_info_holder = ServiceInfoHolder(self._notifier_event_scope)
+        self._service_info_holder = ServiceInfoHolder(
+            self._notifier_event_scope, cache_dir
+        )
         self._client = NamingClient(
             self.namespace,
             self._service_info_holder,

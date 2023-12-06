@@ -1,6 +1,7 @@
 from typing import List
 
 from ..common import constants as const
+from ..common.payload import SlotsMeta
 from ..common.request import Request, ServerRequest
 from ..common.utils import Serializable
 
@@ -26,13 +27,13 @@ class AbstractConfigRequest(Request):
         return const.Config.CONFIG_MODULE
 
 
-class ConfigListenContext(Serializable):
+class ConfigListenContext(Serializable, metaclass=SlotsMeta):
     def __init__(
         self,
         dataId: str = "",
         group: str = "",
-        md5: str = "",
         tenant: str = "",
+        md5: str = "",
     ):
         self.dataId = dataId
         self.group = group

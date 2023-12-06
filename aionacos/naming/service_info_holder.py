@@ -11,8 +11,8 @@ from ..common.log import logger
 
 
 class ServiceInfoHolder(object):
-    def __init__(self, notifier_event_scop: str):
-        self._cache_dir = conf.base_dir / "naming"
+    def __init__(self, notifier_event_scop: str, cache_dir: Path):
+        self._cache_dir = cache_dir
 
         is_load_cache = conf.naming_load_cache_at_start
 

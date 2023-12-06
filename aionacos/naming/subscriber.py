@@ -1,18 +1,16 @@
-from typing import List, Dict, Set
+import typing as t
 
-from aionacos.naming.event import InstanceChangeEvent
-from aionacos.naming.listener import EventListener
-from aionacos.naming.pojo import ServiceInfo
-from aionacos.naming.utils import NamingUtils
+from .event import InstanceChangeEvent
+from .listener import EventListener
+from .pojo import ServiceInfo
+from .utils import NamingUtils
 from ..common.subscriber import Subscriber
 
 
 class InstanceChangeNotifier(Subscriber):
-    __slots__ = ("event_scope", "listener_map")
-
     def __init__(self, event_scope: str):
         self.event_scope = event_scope
-        self.listener_map: Dict[str, Set[EventListener]] = {}
+        self.listener_map: t.Dict[str, t.Set[EventListener]] = {}
 
     def register_listener(
         self,
@@ -47,15 +45,13 @@ class InstanceChangeNotifier(Subscriber):
         if not event_listeners:
             self.listener_map.pop(key)
 
-    def is_subscribed(
-        self, service_name: str, group_name: str, clusters: str
-    ) -> bool:
+    def is_subscribed(self, service_name: str, group_name: str, clusters: str) -> bool:
         key = ServiceInfo.get_key(
             NamingUtils.get_group_name(service_name, group_name), clusters
         )
         return bool(self.listener_map.get(key))
 
-    def get_subscribe_services(self) -> List[ServiceInfo]:
+    def get_subscribe_services(self) -> t.List[ServiceInfo]:
         return [ServiceInfo.from_key(key) for key in self.listener_map.keys()]
 
     def on_event(self, event: InstanceChangeEvent):

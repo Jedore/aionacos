@@ -1,24 +1,16 @@
+import typing as t
 from abc import ABCMeta
-from typing import List
+
+from ..common.payload import SlotsMeta
 
 
-class ConfigRequest(object):
-    __slots__ = ("param", "configContext")
-
+class ConfigRequest(metaclass=SlotsMeta):
     def __init__(self):
-        pass
+        self.param = None
+        self.configContext = None
 
 
-class ConfigResponse(object):
-    __slots__ = (
-        "dataId",
-        "group",
-        "content",
-        "encryptedDataKey",
-        "tenant",
-        "configType",
-    )
-
+class ConfigResponse(metaclass=SlotsMeta):
     def __init__(
         self,
         dataId: str = "",  # noqa
@@ -58,7 +50,7 @@ class ConfigFilter(metaclass=ABCMeta):
 
 
 class VirtualFilterChain(ConfigFilterChain):
-    def __init__(self, additional_filters: List[ConfigFilter]):
+    def __init__(self, additional_filters: t.List[ConfigFilter]):
         self.cur_position = 0
         self.additional_filters = additional_filters
 

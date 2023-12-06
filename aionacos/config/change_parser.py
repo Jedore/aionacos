@@ -1,19 +1,20 @@
-import json
-from abc import ABCMeta
+import orjson
 
 from .event import ConfigChangeItem, ChangeType
 
+CONFIG_PARSER_REGISTRY = {}
 
-# todo use metadata like payload registry
+
+class ConfigChangeParseMeta(type):
+    def __new__(metacls, cls_name, bases, cls_dict):
+        new_cls = super().__new__(metacls, cls_name, bases, cls_dict)
+        if cls_name != "AbstractConfigChangeParse":
+            CONFIG_PARSER_REGISTRY[cls_dict["config_type"]] = new_cls
+        return new_cls
 
 
-class AbstractConfigChangeParse(metaclass=ABCMeta):
+class AbstractConfigChangeParse(metaclass=ConfigChangeParseMeta):
     config_type = ""
-
-    @classmethod
-    def is_responsible_for(cls, config_type: str):
-        """Ignore case"""
-        return cls.config_type.lower() == config_type.lower()
 
     @staticmethod
     def do_parse(old_content: str, new_content: str):
@@ -70,7 +71,6 @@ class JsonChangeParser(AbstractConfigChangeParse):
 
     @classmethod
     def do_parse(cls, old_content: str, new_content: str):
-        old_props = json.loads(old_content) if old_content else {}
-        new_props = json.loads(new_content) if new_content else {}
-
+        old_props = orjson.loads(old_content) if old_content else {}
+        new_props = orjson.loads(new_content) if new_content else {}
         return cls.filter_change_data(old_props, new_props)

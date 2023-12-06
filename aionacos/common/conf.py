@@ -5,7 +5,7 @@ from pathlib import Path
 base_dir = Path(__file__).absolute().parent.parent
 
 server_addr = getenv("NACOS_SERVER_ADDR", "localhost:8848")
-encode = getenv("NACOS_ENCODE", "utf8")
+encode = getenv("NACOS_ENCODE", "UTF-8")
 log_level = logging.getLevelName(getenv("NACOS_LOG_LEVEL", "DEBUG"))
 cache_dir = getenv("NACOS_CACHE_DIR")
 # todo home dir

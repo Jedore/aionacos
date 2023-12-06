@@ -13,6 +13,7 @@ grpcio = "^1.59.2"
 grpcio-tools = "^1.59.2"
 httpx = "^0.25.1"
 netifaces2 = "^0.0.18"
+orjson = "^3.9.10"
 
 
 [[tool.poetry.source]]

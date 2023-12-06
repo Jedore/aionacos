@@ -2,6 +2,7 @@ import enum
 
 from ..common.event import SlowEvent
 from ..common.utils import Serializable
+from ..common.payload import SlotsMeta
 
 
 class ChangeType(enum.IntEnum):
@@ -10,9 +11,7 @@ class ChangeType(enum.IntEnum):
     DELETED = 3
 
 
-class ConfigChangeItem(Serializable):
-    __slots__ = ("key", "old_value", "new_value", "type")
-
+class ConfigChangeItem(Serializable, metaclass=SlotsMeta):
     def __init__(
         self,
         key: str = None,
@@ -26,9 +25,7 @@ class ConfigChangeItem(Serializable):
         self.type = type_
 
 
-class ConfigChangeEvent(Serializable):
-    __slots__ = ("data",)
-
+class ConfigChangeEvent(Serializable, metaclass=SlotsMeta):
     def __init__(self, data: dict):
         self.data = data
 

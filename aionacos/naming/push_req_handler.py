@@ -6,10 +6,7 @@ from ..common.server_req_handler import ServerRequestHandler
 
 
 class NamingPushRequestHandler(ServerRequestHandler):
-    __slots__ = ("_server_info_holder",)
-
     def __init__(self, service_info_holder: ServiceInfoHolder):
-        super().__init__()
         self._service_info_holder = service_info_holder
 
     async def request_reply(self, req: Request):

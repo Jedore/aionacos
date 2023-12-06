@@ -1,8 +1,8 @@
-from typing import TypeVar
+import typing as t
 
 from . import constants as const
 from .ability import ClientAbilities
-from .payload import RegistryMeta
+from .payload import RegistryMeta, SlotsMeta
 from .utils import Serializable
 
 __all__ = [
@@ -40,12 +40,10 @@ class Request(Serializable, metaclass=RegistryMeta):
         raise NotImplementedError()
 
 
-RequestType = TypeVar("RequestType", bound=Request)
+RequestType = t.TypeVar("RequestType", bound=Request)
 
 
-class RequestMeta(object):
-    __slots__ = ("clientIp", "clientVersion", "connectionId", "labels")
-
+class RequestMeta(object, metaclass=SlotsMeta):
     def __init__(
         self,
         clientIp: str = "",

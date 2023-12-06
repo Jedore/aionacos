@@ -1,4 +1,4 @@
-from typing import Dict, Callable
+import typing as t
 
 from . import group_key
 from .cache_data import CacheData
@@ -11,9 +11,8 @@ from ..common.server_req_handler import ServerRequestHandler
 
 class ConfigPushRequestHandler(ServerRequestHandler):
     def __init__(
-        self, notify_listen_config: Callable, cache_map: Dict[str, CacheData]
+        self, notify_listen_config: t.Callable, cache_map: t.Dict[str, CacheData]
     ):
-        super().__init__()
         self._notify_listen_config = notify_listen_config
         self._cache_map = cache_map
 

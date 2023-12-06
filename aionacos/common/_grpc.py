@@ -1,12 +1,13 @@
 import asyncio
 import copy
 import enum
-import json
 import typing as t
 
 import grpc
+import orjson
 
 from . import constants as cst
+from . import utils
 from .exceptions import NacosException, RemoteException
 from .listener import ConnectionEventListener
 from .log import logger
@@ -15,9 +16,7 @@ from .request import *
 from .response import *
 from .server_manager import ServerManager
 from .server_req_handler import ServerRequestHandler
-from .utils import NacosJSONEncoder
 from .._protocol import *
-from .._utils import local_ip, timestamp
 
 
 class GrpcStatus(str, enum.Enum):
@@ -39,7 +38,6 @@ class ClientDetectionRequestHandler(ServerRequestHandler):
 
 class ConnectResetRequestHandler(ServerRequestHandler):
     def __init__(self, client: "GrpcClient"):
-        super().__init__()
         self._client = client
 
     async def request_reply(self, req: Request):
@@ -96,18 +94,18 @@ class Connection(object):
     def _req2payload(req: Request) -> Payload:
         _req = copy.deepcopy(req)
         pd = Payload()
-        pd.metadata.clientIp = local_ip()
+        pd.metadata.clientIp = utils.local_ip()
         pd.metadata.type = _req.cls_name
         pd.metadata.headers.update(_req.headers)
         _req.headers.clear()
-        pd.body.value = json.dumps(_req, cls=NacosJSONEncoder).encode(cst.ENCODE)
+        pd.body.value = orjson.dumps(_req, default=utils.default)
         return pd
 
     @staticmethod
     def _rsp2payload(rsp: Response) -> Payload:
         pd = Payload()
         pd.metadata.type = rsp.cls_name
-        pd.body.value = json.dumps(rsp, cls=NacosJSONEncoder).encode(cst.ENCODE)
+        pd.body.value = orjson.dumps(rsp, default=utils.default)
         return pd
 
     @staticmethod
@@ -115,7 +113,7 @@ class Connection(object):
         if not hasattr(pd, "body"):
             return
 
-        data: dict = json.loads(pd.body.value)
+        data: dict = orjson.loads(pd.body.value)
         # "type" is reserved
         if "type" in data:
             data["type_"] = data.pop("type")
@@ -171,7 +169,7 @@ class GrpcClient(object):
         # todo check
         self._labels = labels
         self._conn: t.Optional[Connection] = None
-        self._last_active_time: int = timestamp()  # second
+        self._last_active_time: int = utils.timestamp()  # second
         # todo use dict
         self._ser_req_handlers: t.List[ServerRequestHandler] = []
         self._connection_listeners: t.List[ConnectionEventListener] = []
@@ -324,7 +322,7 @@ class GrpcClient(object):
             self._add_conn_event(ConnectionEvent.DISCONNECTED)
 
     def _set_active_time(self):
-        self._last_active_time = timestamp()
+        self._last_active_time = utils.timestamp()
 
     def register_request_handler(self, handler: ServerRequestHandler):
         self._ser_req_handlers.append(handler)
@@ -338,9 +336,9 @@ class GrpcClient(object):
         self, req: Request, timeout: float = cst.READ_TIMEOUT, throw: bool = True
     ) -> ResponseType:
         retry_times = 0
-        t_start = timestamp()
+        t_start = utils.timestamp()
         error = None
-        while retry_times < self.RETRY_TIMES and timestamp() < t_start + timeout:
+        while retry_times < self.RETRY_TIMES and utils.timestamp() < t_start + timeout:
             wait_reconnect = False
             try:
                 # when connection is abnormal
@@ -351,7 +349,9 @@ class GrpcClient(object):
                         NacosException.CLIENT_DISCONNECT, msg=self._status
                     )
 
+                # logger.debug("[%s] request server: %s", self._name, req)
                 rsp = await self._conn.request(req, timeout=timeout)
+                # logger.debug("[%s] server respond: %s", self._name, rsp)
 
                 # when server return ErrorResponse
                 if isinstance(rsp, ErrorResponse):
@@ -395,7 +395,7 @@ class GrpcClient(object):
         if self._conn is None:
             return False
 
-        if timestamp() - self._last_active_time <= self.KEEP_ALIVE_TIME:
+        if utils.timestamp() - self._last_active_time <= self.KEEP_ALIVE_TIME:
             return True
 
         # logger.debug("[%s] health check", self._name)
@@ -428,7 +428,7 @@ class GrpcClient(object):
         while self.is_running():
             try:
                 req = await self._conn.read_ser_req()
-                logger.debug("[%s] server request: %s.", self._name, req)
+                # logger.debug("[%s] server request: %s.", self._name, req)
 
                 if req is None:
                     continue
@@ -438,7 +438,7 @@ class GrpcClient(object):
                     if rsp is not None:
                         rsp.requestId = req.requestId
                         await self._conn.bi_response(rsp)
-                        logger.debug("[%s] respond server: %s", self._name, rsp)
+                        # logger.debug("[%s] respond server: %s", self._name, rsp)
                         break
             except grpc.aio.AioRpcError as err:
                 error = f"{err.code()} {err.details()}"
@@ -471,7 +471,10 @@ class GrpcClient(object):
                         continue
 
                     # Health check.
-                    if timestamp() - self._last_active_time <= self.KEEP_ALIVE_TIME:
+                    if (
+                        utils.timestamp() - self._last_active_time
+                        <= self.KEEP_ALIVE_TIME
+                    ):
                         continue
 
                     if await self._health_check():

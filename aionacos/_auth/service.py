@@ -1,17 +1,16 @@
+import typing as t
 from abc import ABCMeta
-from typing import Optional
 
 import httpx
 
 from . import constants as const
-from .._utils import timestamp
-from ..common import conf
+from ..common import conf, utils
 from ..common.log import logger
 
 
 class AuthService(metaclass=ABCMeta):
-    identity_context: Optional[dict] = None
-    server_urls: Optional[list] = None
+    identity_context: t.Optional[dict] = None
+    server_urls: t.Optional[list] = None
 
     def __init__(self, name: str):
         self._name = name
@@ -43,7 +42,7 @@ class NacosAuthService(AuthService):
 
         # Check whether identity is expired.
         if (
-            timestamp() - self._last_refresh_time
+            utils.timestamp() - self._last_refresh_time
             < self._token_ttl - self._token_refresh_window
         ):
             return True
@@ -54,8 +53,8 @@ class NacosAuthService(AuthService):
                 # todo use aiohttp
                 rsp = httpx.post(
                     url + login_path,
-                    params={"username": properties.username},
-                    data={"password": properties.password},
+                    params={"username": conf.username},
+                    data={"password": conf.password},
                 )
 
                 error = None
@@ -67,7 +66,7 @@ class NacosAuthService(AuthService):
                         )
                         self._token_ttl = data.get(const.TOKENTTL)
                         self._token_refresh_window = self._token_ttl / 10
-                        self._last_refresh_time = timestamp()
+                        self._last_refresh_time = utils.timestamp()
 
                         logger.info("[%s] %s login %s succeed", self._name, self, url)
                         return True

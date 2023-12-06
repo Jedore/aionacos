@@ -9,11 +9,11 @@ from .listener import Listener
 from .push_req_handler import ConfigPushRequestHandler
 from .request import *
 from .response import *
-from .. import _utils
 from .._auth.security_proxy import SecurityProxy
-from .._utils import tenant_util, md5_util
+from .._utils import tenant_util
 from ..common import (
     conf,
+    utils,
     constants as cst,
     GrpcClient,
     ConnectionEventListener,
@@ -51,7 +51,7 @@ class ConfigClient(object):
         self._namespace = namespace
         self._cache_dir = cache_dir
         self._listen_execute_bell = asyncio.Queue(maxsize=1)
-        self._last_all_sync_time = _utils.timestamp()
+        self._last_all_sync_time = utils.timestamp()
 
         labels = {
             cst.LABEL_SOURCE: cst.LABEL_SOURCE_SDK,
@@ -78,7 +78,7 @@ class ConfigClient(object):
         # todo server list change event
         await self._grpc_client.start()
         await asyncio.sleep(3)
-        self._listen_task = asyncio.create_task(self.listen_config_loop())
+        self._listen_task = asyncio.create_task(self.wait_listen_config())
 
     def stop(self):
         logger.debug("[Config] client stop")
@@ -89,7 +89,10 @@ class ConfigClient(object):
 
     async def _req2server(self, req: Request, throw: bool = True) -> ResponseType:
         req.headers.update(self._security_proxy.get_identity_context())
+        req.headers.update(self.get_common_header())
+        logger.debug("[Config] request server: %s", req)
         rsp: ResponseType = await self._grpc_client.request(req, throw=throw)
+        logger.debug("[Config] server respond: %s", rsp)
         if rsp.success:
             return rsp
 
@@ -108,7 +111,7 @@ class ConfigClient(object):
         self.notify_listen_config()
 
         # todo
-        self._redo_service.cache(self.add_listeners, data_id, group, listeners)
+        # self._redo_service.cache(self.add_listeners, data_id, group, listeners)
 
     def remove_listener(self, data_id: str, group: str, listener: Listener):
         cache = self.get_cache(data_id, group)
@@ -132,7 +135,7 @@ class ConfigClient(object):
         self.notify_listen_config()
 
         # todo
-        self._redo_service.cache(self.add_tenant_listeners, data_id, group, listeners)
+        # self._redo_service.cache(self.add_tenant_listeners, data_id, group, listeners)
 
     def add_tenant_listeners_with_content(
         self,
@@ -178,11 +181,11 @@ class ConfigClient(object):
         return self._cache_map.get(group_key.get_key_tenant(data_id, group, tenant))
 
     def get_common_header(self):
-        ts = str(_utils.timestamp_milli())
+        ts = str(utils.timestamp_milli())
         return {
             cst.CLIENT_APPNAME_HEADER: "unknown",
             cst.CLIENT_REQUEST_TS_HEADER: ts,
-            cst.CLIENT_REQUEST_TOKEN_HEADER: md5_util.md5_hex(ts + "", cst.ENCODE),
+            cst.CLIENT_REQUEST_TOKEN_HEADER: utils.md5_hex(ts + "", cst.ENCODE),
             CONFIG_INFO_HEADER: DEFAULT_CONFIG_INFO,
             cst.CHARSET_KEY: self._encode,
         }
@@ -190,7 +193,6 @@ class ConfigClient(object):
     async def query_config(self, data_id: str, group: str, tenant: str, notify: bool):
         req = ConfigQueryRequest(dataId=data_id, group=group, tenant=tenant)
         req.headers.update({NOTIFY_HEADER: str(notify).lower()})
-        req.headers.update(self.get_common_header())
 
         rsp: ConfigQueryResponse = await self._req2server(req)
         if rsp.success:
@@ -257,7 +259,7 @@ class ConfigClient(object):
 
     async def refresh_content_and_check(self, changed_key: str, notify: bool):
         # todo notify meaning
-        logger.debug("[Config] Refresh content and check md5: %s", changed_key)
+        # logger.debug("[Config] Refresh content and check md5: %s", changed_key)
 
         try:
             cache = self._cache_map.get(changed_key)
@@ -284,8 +286,9 @@ class ConfigClient(object):
                 err,
             )
 
-    async def listen_config_loop(self):
+    async def wait_listen_config(self):
         # logger.debug("[Config] wait listen config queue")
+        # todo stop task when disconnect
 
         while True:
             try:
@@ -318,7 +321,7 @@ class ConfigClient(object):
         try:
             listen_caches: t.List[CacheData] = []
             remove_listen_caches: t.List[CacheData] = []
-            now = _utils.timestamp()
+            now = utils.timestamp()
             need_all_sync = now - self._last_all_sync_time >= ALL_SYNC_INTERVAL
             for cache in self._cache_map.values():
                 if cache.is_sync_with_server:
@@ -363,7 +366,7 @@ class ConfigClient(object):
                                 continue
 
                             # update last modified time
-                            cache.last_modified_time = _utils.timestamp()
+                            cache.last_modified_time = utils.timestamp()
                             cache.is_sync_with_server = True
 
                         cache.is_initializing = False
@@ -383,9 +386,11 @@ class ConfigClient(object):
                         "[Config] remove listen config failed: %s, %s", rsp, req
                     )
 
+            # reset last all sync time
             if need_all_sync:
                 self._last_all_sync_time = now
 
+            # re sync md5 !!!
             if has_changed_keys:
                 self.notify_listen_config()
             # else:
@@ -399,7 +404,12 @@ class ConfigClient(object):
         req.listen = listen
         for cache in cache_list:
             req.configListenContexts.append(
-                ConfigListenContext(cache.data_id, cache.group, cache.md5, cache.tenant)
+                ConfigListenContext(
+                    dataId=cache.data_id,
+                    group=cache.group,
+                    tenant=cache.tenant,
+                    md5=cache.md5,
+                )
             )
         return req
 

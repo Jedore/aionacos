@@ -1,9 +1,8 @@
-from abc import ABCMeta
-
 from .event import Event
+from .payload import SlotsMeta
 
 
-class Subscriber(metaclass=ABCMeta):
+class Subscriber(metaclass=SlotsMeta):
     def on_event(self, event: Event):
         raise NotImplementedError()
 
@@ -19,7 +18,7 @@ class Subscriber(metaclass=ABCMeta):
         return event.scope() is None
 
 
-class SmartSubscriber(Subscriber, metaclass=ABCMeta):
+class SmartSubscriber(Subscriber):
     @staticmethod
     def subscribe_type():
         return

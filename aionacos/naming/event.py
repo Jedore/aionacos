@@ -1,25 +1,17 @@
-from typing import List
+import typing as t
 
 from .pojo import Instance
 from ..common.event import Event, SlowEvent
 
 
 class InstanceChangeEvent(Event):
-    __slots__ = Event.__slots__ + (
-        "event_scope",
-        "service_name",
-        "group_name",
-        "clusters",
-        "hosts",
-    )
-
     def __init__(
         self,
         eventScope: str,
         serviceName: str,
         groupName: str,
         clusters: str,
-        hosts: List[Instance],
+        hosts: t.List[Instance],
     ):
         super().__init__()
 

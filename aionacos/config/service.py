@@ -32,6 +32,7 @@ class ConfigService(object):
         self._client.stop()
 
     async def get_config(self, data_id: str, group: str = cst.DEFAULT_GROUP):
+        # todo how to update old snapshot right now
         content = local_info.get_snapshot(data_id, group, self._namespace, cache_dir)
         if content is not None:
             return content
@@ -44,12 +45,6 @@ class ConfigService(object):
             return rsp.content
         except NacosException as err:
             pass
-
-    async def get_config_and_sign_listener(
-        self, data_id: str, listener: Listener, group: str = cst.DEFAULT_GROUP
-    ):
-        # todo get and sign
-        pass
 
     async def publish_config(
         self, data_id: str, content: str, type_: str, group: str = cst.DEFAULT_GROUP

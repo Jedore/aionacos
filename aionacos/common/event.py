@@ -1,9 +1,7 @@
-from abc import ABCMeta
+from .payload import SlotsMeta
 
 
-class Event(metaclass=ABCMeta):
-    __slots__ = ("serialVersionUI", "sequence")
-
+class Event(metaclass=SlotsMeta):
     def __init__(self):
         self.serialVersionUI = -3731383194964997493
         # todo event sequence

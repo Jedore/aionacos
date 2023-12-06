@@ -1,4 +1,10 @@
-from json import JSONEncoder
+import sys
+import time
+from hashlib import md5
+
+import netifaces
+
+from . import constants as cst
 
 
 class Serializable(object):
@@ -24,8 +30,44 @@ class Serializable(object):
         return self.__class__.__name__ + str(self.dict())
 
 
-class NacosJSONEncoder(JSONEncoder):
-    def default(self, o: any) -> any:
-        if isinstance(o, Serializable):
-            return o.dict()
-        return super().default(o)
+def timestamp():
+    """second timestamp"""
+    return round(time.time())
+
+
+def timestamp_milli():
+    """second timestamp"""
+    return round(1000 * time.time())
+
+
+def local_ip() -> str:
+    try:
+        if sys.platform.startswith("linux"):
+            addr = netifaces.ifaddresses("eth0")
+        elif sys.platform.startswith("win32"):
+            for item in netifaces.interfaces():
+                if "Intel" in item:
+                    addr = netifaces.ifaddresses(item)
+                    break
+            else:
+                return ""
+        elif sys.platform.startswith("darwin"):
+            addr = netifaces.ifaddresses("en0")
+        else:
+            return ""
+        return addr.get(netifaces.AF_INET)[0].get("addr")
+    except Exception as e:  # noqa
+        # todo error
+        return ""
+
+
+def default(o: any) -> dict:
+    if isinstance(o, Serializable):
+        return o.dict()
+    raise TypeError
+
+
+def md5_hex(value: str, encode: str):
+    if value is None:
+        return cst.NULL
+    return md5(value.encode(encode)).hexdigest()
