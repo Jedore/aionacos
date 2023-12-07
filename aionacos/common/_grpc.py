@@ -2,6 +2,7 @@ import asyncio
 import copy
 import enum
 import typing as t
+import logging
 
 import grpc
 import orjson
@@ -16,7 +17,7 @@ from .request import *
 from .response import *
 from .server_manager import ServerManager
 from .server_req_handler import ServerRequestHandler
-from .._protocol import *
+from ..protocol import *
 
 
 class GrpcStatus(str, enum.Enum):
@@ -45,7 +46,6 @@ class ConnectResetRequestHandler(ServerRequestHandler):
             if self._client.is_running():
                 if req.serverIp:
                     server_addr = f"{req.serverIp}{cst.COLON}{req.serverPort}"
-                    # todo do not wait
                     await self._client.switch_server_async(addr=server_addr)
                 else:
                     await self._client.switch_server_async()
@@ -73,11 +73,11 @@ class ConnectionEvent(object):
 
 
 class Connection(object):
-    def __init__(self, name: str, addr: str, param: int = 0):
+    def __init__(self, name: str, server_addr: str, param: int = 0):
         self._name = name
-        self._addr = addr
+        self._server_addr = server_addr
         self._channel = grpc.aio.insecure_channel(
-            self._addr,
+            self._server_addr,
             options=(("grpc.experimental.tcp_min_read_chunk_size", param),),
         )
         self._stub = RequestStub(self._channel)
@@ -87,8 +87,8 @@ class Connection(object):
         # self.abandon = False
 
     @property
-    def addr(self):
-        return self._addr
+    def server_addr(self):
+        return self._server_addr
 
     @staticmethod
     def _req2payload(req: Request) -> Payload:
@@ -138,7 +138,7 @@ class Connection(object):
     async def bi_response(self, rsp: Response):
         await self._bi_stream.write(self._rsp2payload(rsp))
 
-    async def read_ser_req(self) -> t.Optional[RequestType]:
+    async def read_server_request(self) -> t.Optional[RequestType]:
         pd = await self._bi_stream.read()
         if pd is grpc.aio.EOF:
             # The stream is end, new a stream.
@@ -164,14 +164,13 @@ class GrpcClient(object):
     RETRY_TIMES = 3
 
     def __init__(self, service: str, server_manager: ServerManager, labels: dict):
-        self._name = service
+        self._service = service
         self._server_manager = server_manager
         # todo check
         self._labels = labels
         self._conn: t.Optional[Connection] = None
         self._last_active_time: int = utils.timestamp()  # second
-        # todo use dict
-        self._ser_req_handlers: t.List[ServerRequestHandler] = []
+        self._server_req_handlers: t.List[ServerRequestHandler] = []
         self._connection_listeners: t.List[ConnectionEventListener] = []
         self._switch_queue: asyncio.Queue[ReconnectCxt] = asyncio.Queue(maxsize=1)
         self._conn_event_queue: asyncio.Queue[ConnectionEvent] = asyncio.Queue()
@@ -182,8 +181,8 @@ class GrpcClient(object):
         self._server_request_task: t.Optional[asyncio.Task] = None
 
     @property
-    def name(self):
-        return self._name
+    def service(self):
+        return self._service
 
     def is_initializing(self) -> bool:
         return self._status == GrpcStatus.INITIALIZING
@@ -232,14 +231,16 @@ class GrpcClient(object):
                 self._conn = await self._connect2server(addr)
 
                 if self._conn is not None:
-                    logger.debug("[%s] connection: %s", self._name, self._conn.conn_id)
+                    logger.debug(
+                        "[%s] connection: %s", self._service, self._conn.conn_id
+                    )
                     self._add_conn_event(ConnectionEvent.CONNECTED)
                     self.set_running()
 
                     # Jump out loop.
                     break
             except Exception as err:
-                logger.debug("[%s] connect failed, %s: %s", self._name, addr, err)
+                logger.debug("[%s] connect failed, %s: %s", self._service, addr, err)
 
             # Minus 1 when connect failed.
             retry_times -= 1
@@ -252,7 +253,7 @@ class GrpcClient(object):
         self._tasks.append(asyncio.create_task(self._conn_event_notify()))
 
     def stop(self):
-        logger.info("[%s] grpc shutdown.", self._name)
+        logger.info("[%s] grpc shutdown.", self._service)
 
         self.set_shutdown()
 
@@ -274,34 +275,34 @@ class GrpcClient(object):
             if not isinstance(rsp, ServerCheckResponse):
                 await conn.close()
             elif not rsp.success:
-                logger.debug("[%s] server check failed: %s", self._name, rsp.message)
+                logger.debug("[%s] server check failed: %s", self._service, rsp.message)
             else:
                 return rsp.connectionId
 
         except grpc.aio.AioRpcError as err:
-            logger.error("[%s] server check failed: %s", self._name, err.details())
+            logger.error("[%s] server check failed: %s", self._service, err.details())
         except Exception as err:
-            logger.debug("[%s] server check failed: %s", self._name, err)
+            logger.debug("[%s] server check failed: %s", self._service, err)
 
     async def _connect2server(self, server_addr: str) -> t.Optional[Connection]:
-        logger.debug("[%s] server: %s", self._name, server_addr)
+        # logger.debug("[%s] server: %s", self._name, server_addr)
 
         # 8192/8193 is for creating 2 different connection for naming and config.
         # todo find better way
-        if self._name == "Naming":
-            connection = Connection(self._name, server_addr, param=8192)
+        if self._service == "Naming":
+            conn = Connection(self._service, server_addr, param=8192)
         else:
-            connection = Connection(self._name, server_addr, param=8193)
+            conn = Connection(self._service, server_addr, param=8193)
 
         # Server check.
-        connection.conn_id = await self._server_check(connection)
+        conn.conn_id = await self._server_check(conn)
 
         # Check failed.
-        if connection.conn_id is None:
+        if conn.conn_id is None:
             return
 
         # Set up connection.
-        await connection.bi_request(
+        await conn.bi_request(
             ConnectionSetupRequest(
                 labels=self._labels,
                 clientVersion=cst.CLIENT_VERSION,
@@ -311,11 +312,11 @@ class GrpcClient(object):
         # Wait to set up connection done.
         await asyncio.sleep(1)
 
-        return connection
+        return conn
 
     async def _close_connection(self):
         if self._conn:
-            logger.debug("[%s] close connection: %s", self._name, self._conn.conn_id)
+            logger.debug("[%s] close connection: %s", self._service, self._conn.conn_id)
             self.set_unhealthy()
             await self._conn.close()
             self._conn = None
@@ -325,7 +326,7 @@ class GrpcClient(object):
         self._last_active_time = utils.timestamp()
 
     def register_request_handler(self, handler: ServerRequestHandler):
-        self._ser_req_handlers.append(handler)
+        self._server_req_handlers.append(handler)
         # logger.debug("[%s] req handler: %s", self._name, handler.name)
 
     def register_connection_listener(self, listener: ConnectionEventListener):
@@ -334,26 +335,25 @@ class GrpcClient(object):
 
     async def request(
         self, req: Request, timeout: float = cst.READ_TIMEOUT, throw: bool = True
-    ) -> ResponseType:
+    ) -> t.Optional[ResponseType]:
         retry_times = 0
         t_start = utils.timestamp()
         error = None
         while retry_times < self.RETRY_TIMES and utils.timestamp() < t_start + timeout:
             wait_reconnect = False
             try:
-                # when connection is abnormal
+                # abnormal connection
                 if self._conn is None or not self.is_running():
                     wait_reconnect = True
-                    # raise error, then retry.
                     raise NacosException(
                         NacosException.CLIENT_DISCONNECT, msg=self._status
                     )
 
-                # logger.debug("[%s] request server: %s", self._name, req)
+                # logger.debug("[%s] request server: %s", self._service, req)
                 rsp = await self._conn.request(req, timeout=timeout)
                 # logger.debug("[%s] server respond: %s", self._name, rsp)
 
-                # when server return ErrorResponse
+                # error response
                 if isinstance(rsp, ErrorResponse):
                     if rsp.errorCode == NacosException.UN_REGISTER:
                         wait_reconnect = True
@@ -363,17 +363,28 @@ class GrpcClient(object):
                     # raise error, then retry.
                     raise NacosException(rsp.errorCode, msg=rsp.message)
 
+                # log error
+                if rsp is None:
+                    logger.error("[%s] server respond None", self._service)
+                elif not rsp.success:
+                    logger.error(
+                        "[%s] server respond error: %s %s",
+                        self._service,
+                        rsp.errorCode,
+                        rsp.message,
+                    )
+
                 # update active time
                 self._set_active_time()
                 return rsp
 
             except Exception as err:
-                # wait before next retry loop when reconnecting...
+                # wait before next retry loop when reconnect
                 if wait_reconnect:
                     await asyncio.sleep(min(0.1, timeout / 3))
                 logger.debug(
                     "[%s] request failed, retry_times: %s, req: %s, error: %s",
-                    self._name,
+                    self._service,
                     retry_times,
                     req,
                     err,
@@ -405,9 +416,9 @@ class GrpcClient(object):
             if rsp and rsp.success:
                 return True
             else:
-                logger.debug("[%s] health check failed: %s", self._name, rsp)
+                logger.debug("[%s] health check failed: %s", self._service, rsp)
         except Exception as err:
-            logger.debug("[%s] health check failed: %s", self._name, err)
+            logger.debug("[%s] health check failed: %s", self._service, err)
 
         return False
 
@@ -417,23 +428,23 @@ class GrpcClient(object):
                 ReconnectCxt(server_addr=addr, on_request_fail=on_req_fail)
             )
         except asyncio.QueueFull:
-            # do nothing
+            # skip
             pass
         except Exception as err:
-            logger.error("[%s] put _switch_queue failed: %s", self._name, err)
+            logger.error("[%s] put _switch_queue failed: %s", self._service, err)
 
     async def _handle_server_request(self):
         # logger.debug("[%s] wait server req.", self._name)
 
         while self.is_running():
             try:
-                req = await self._conn.read_ser_req()
+                req = await self._conn.read_server_request()
                 # logger.debug("[%s] server request: %s.", self._name, req)
 
                 if req is None:
                     continue
 
-                for handler in self._ser_req_handlers:
+                for handler in self._server_req_handlers:
                     rsp = await handler.request_reply(req)
                     if rsp is not None:
                         rsp.requestId = req.requestId
@@ -442,7 +453,9 @@ class GrpcClient(object):
                         break
             except grpc.aio.AioRpcError as err:
                 error = f"{err.code()} {err.details()}"
-                logger.debug("[%s] handle server request failed: %s", self._name, error)
+                logger.debug(
+                    "[%s] handle server request failed: %s", self._service, error
+                )
                 # todo why
                 await asyncio.sleep(self.KEEP_ALIVE_TIME)
 
@@ -450,7 +463,9 @@ class GrpcClient(object):
                 # Stop loop when cancel task.
                 break
             except Exception as err:
-                logger.debug("[%s] _handle_ser_req failed: %s", self._name, err)
+                logger.debug(
+                    "[%s] handle server request failed: %s", self._service, err
+                )
 
     async def _switch_server(self):
         # logger.debug("[%s] get _switch_server queue & health check.", self._name)
@@ -500,7 +515,7 @@ class GrpcClient(object):
                 break
 
             except Exception as err:
-                logger.debug("[%s] switch server failed: %s", self._name, err)
+                logger.debug("[%s] switch server failed: %s", self._service, err)
 
     async def _conn_event_notify(self):
         # logger.debug("[%s] wait conn event.", self._name)
@@ -517,7 +532,7 @@ class GrpcClient(object):
                 # Stop loop when cancel task.
                 break
             except Exception as err:
-                logger.error("[%s] conn event notify failed: %s", self._name, err)
+                logger.error("[%s] conn event notify failed: %s", self._service, err)
 
     async def _reconnect(self, cxt: ReconnectCxt):
         if cxt.on_req_fail and await self._health_check():
@@ -528,7 +543,7 @@ class GrpcClient(object):
         await self._close_connection()
 
         logger.debug(
-            "[%s] reconnect server: %s", self._name, cxt.server_addr or "random"
+            "[%s] reconnect server: %s", self._service, cxt.server_addr or "random"
         )
 
         # Loop until reconnect successfully.
@@ -545,7 +560,7 @@ class GrpcClient(object):
                     # reconnect succeeded
                     logger.debug(
                         "[%s] reconnect server: %s, conn: %s",
-                        self._name,
+                        self._service,
                         server_addr,
                         conn_new.conn_id,
                     )
@@ -577,7 +592,7 @@ class GrpcClient(object):
             if reconnect_times and reconnect_times % self._server_manager.size() == 0:
                 logger.debug(
                     "[%s] reconnect failed %s times, server: %s, error: %s",
-                    self._name,
+                    self._service,
                     reconnect_times,
                     self._server_manager.cur_server(),
                     error,
@@ -598,7 +613,7 @@ class GrpcClient(object):
                 await asyncio.sleep(min(retry_turns + 1, 50) * 0.1)
 
             if self.is_shutdown():
-                logger.debug("[%s] grpc shutdown, stop reconnect.", self._name)
+                logger.debug("[%s] grpc shutdown, stop reconnect.", self._service)
 
     async def _notify_connected(self):
         # logger.debug("[%s] notify connected.", self._name)
@@ -608,7 +623,7 @@ class GrpcClient(object):
             try:
                 listener.on_connected()
             except Exception as err:
-                logger.debug("[%s] notify connected failed: %s", self._name, err)
+                logger.debug("[%s] notify connected failed: %s", self._service, err)
 
     async def _notify_disconnected(self):
         # logger.debug("[%s] notify disconnected.", self._name)
@@ -620,4 +635,4 @@ class GrpcClient(object):
             try:
                 listener.on_disconnected()
             except Exception as err:
-                logger.debug("[%s] notify disconnected failed: %s", self._name, err)
+                logger.debug("[%s] notify disconnected failed: %s", self._service, err)

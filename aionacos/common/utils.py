@@ -8,10 +8,6 @@ from . import constants as cst
 
 
 class Serializable(object):
-    """
-    Custom serializable class for request/event .etc
-    """
-
     def dict(self):
         data = {}
         for attr in self.__slots__:  # noqa
@@ -36,7 +32,7 @@ def timestamp():
 
 
 def timestamp_milli():
-    """second timestamp"""
+    """milli second timestamp"""
     return round(1000 * time.time())
 
 

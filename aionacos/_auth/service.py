@@ -1,21 +1,22 @@
+import abc
 import typing as t
-from abc import ABCMeta
 
-import httpx
+import aiohttp
 
 from . import constants as const
 from ..common import conf, utils
 from ..common.log import logger
 
 
-class AuthService(metaclass=ABCMeta):
+class AbstractAuthService(abc.ABC):
     identity_context: t.Optional[dict] = None
     server_urls: t.Optional[list] = None
 
-    def __init__(self, name: str):
-        self._name = name
+    def __init__(self, service: str):
+        self._service = service
 
-    def login(self):
+    @abc.abstractmethod
+    async def login(self):
         raise NotImplementedError()
 
     # def set_request_template(self):
@@ -31,14 +32,23 @@ class AuthService(metaclass=ABCMeta):
         return self.__class__.__name__
 
 
-class NacosAuthService(AuthService):
+class HttpAuthService(AbstractAuthService):
     _token_ttl = 0
     _token_refresh_window = 0
     _last_refresh_time = 0
     identity_context = {}
 
-    def login(self):
-        logger.debug("[%s] %s login check", self._name, self)
+    def __init__(self, service: str):
+        super().__init__(service)
+        self._session: t.Optional[aiohttp.ClientSession] = None
+
+    async def login(self):
+        if not self._session:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=conf.login_timeout)
+            )
+
+        # logger.debug("[%s] %s login check", self._service, self)
 
         # Check whether identity is expired.
         if (
@@ -47,20 +57,15 @@ class NacosAuthService(AuthService):
         ):
             return True
 
-        login_path = "/nacos/v1/auth/users/login"
         for url in self.server_urls:
             try:
-                # todo use aiohttp
-                rsp = httpx.post(
-                    url + login_path,
+                async with self._session.post(
+                    url + conf.login_path,
                     params={"username": conf.username},
                     data={"password": conf.password},
-                )
-
-                error = None
-                if isinstance(rsp, httpx.Response):
-                    if rsp.status_code == 200:
-                        data = rsp.json()
+                ) as rsp:
+                    if rsp.status == 200:
+                        data = await rsp.json()
                         self.identity_context[const.ACCESSTOKEN] = data.get(
                             const.ACCESSTOKEN
                         )
@@ -68,12 +73,28 @@ class NacosAuthService(AuthService):
                         self._token_refresh_window = self._token_ttl / 10
                         self._last_refresh_time = utils.timestamp()
 
-                        logger.info("[%s] %s login %s succeed", self._name, self, url)
+                        logger.info(
+                            "[%s] %s login %s succeed", self._service, self, url
+                        )
                         return True
-                    error = rsp.text
-                else:
-                    error = "unknown error"
+                    else:
+                        logger.error(
+                            "[%s] %s login failed: %s, %s",
+                            self._service,
+                            self,
+                            url,
+                            await rsp.text(),
+                        )
             except Exception as err:
-                error = err
+                logger.error(
+                    "[%s] %s login failed: %s, %s", self._service, self, url, err
+                )
 
-            logger.error("[%s] %s login failed: %s, %s", self._name, self, url, error)
+
+class RamAuthService(AbstractAuthService):
+    # todo ram auth
+    def login(self):
+        pass
+
+    def validate(self):
+        pass

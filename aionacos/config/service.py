@@ -1,4 +1,4 @@
-from . import cache_dir, local_info
+from . import local_info
 from .client import ConfigClient
 from .filter import ConfigFilterChainManager, ConfigFilter
 from .listener import Listener
@@ -20,7 +20,7 @@ class ConfigService(object):
             self._filter_chain_manager,
             server_manager,
             self._namespace,
-            cache_dir,
+            conf.config_cache,
         )
 
     async def start(self):
@@ -33,18 +33,17 @@ class ConfigService(object):
 
     async def get_config(self, data_id: str, group: str = cst.DEFAULT_GROUP):
         # todo how to update old snapshot right now
-        content = local_info.get_snapshot(data_id, group, self._namespace, cache_dir)
+        content = local_info.get_snapshot(
+            data_id, group, self._namespace, conf.config_cache
+        )
         if content is not None:
             return content
 
-        try:
-            rsp: ConfigQueryResponse = await self._client.query_config(
-                data_id, group, self._namespace, False
-            )
-            # todo filter
-            return rsp.content
-        except NacosException as err:
-            pass
+        rsp: ConfigQueryResponse = await self._client.query_config(
+            data_id, group, self._namespace, False
+        )
+        # todo filter
+        return rsp and rsp.content
 
     async def publish_config(
         self, data_id: str, content: str, type_: str, group: str = cst.DEFAULT_GROUP

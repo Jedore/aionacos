@@ -1,9 +1,7 @@
-from .change_parser import CONFIG_PARSER_REGISTRY
+from .change_parser import get_parser
 
 
 class ConfigChangeHandler(object):
     @classmethod
     def parse_change_data(cls, old_content: str, new_content: str, type_: str):
-        parser = CONFIG_PARSER_REGISTRY.get(type_.lower())
-        if parser:
-            return parser.do_parse(old_content, new_content)
+        return get_parser(type_).parse(old_content, new_content)

@@ -4,7 +4,7 @@ from . import group_key
 from .cache_data import CacheData
 from .request import *
 from .response import *
-from .. import _utils
+from ..common import utils
 from ..common.request import Request
 from ..common.server_req_handler import ServerRequestHandler
 
@@ -21,10 +21,10 @@ class ConfigPushRequestHandler(ServerRequestHandler):
             key = group_key.get_key_tenant(req.dataId, req.group, req.tenant)
             cache = self._cache_map.get(key)
             if cache:
-                cache.last_modified_time = _utils.timestamp()
+                cache.last_modified_time = utils.timestamp()
                 cache.is_sync_with_server = False
                 self._notify_listen_config()
             return ConfigChangeNotifyResponse()
         elif isinstance(req, ClientConfigMetricRequest):
-            # todo metric request
+            # may be ...
             return ClientConfigMetricResponse()

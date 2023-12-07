@@ -12,10 +12,8 @@ from .subscriber import InstanceChangeNotifier
 from .utils import NamingUtils
 from .._auth.security_proxy import SecurityProxy
 from ..common import GrpcClient
-from ..common.exceptions import NacosException
 from ..common.listener import ConnectionEventListener
 from ..common.log import logger
-from ..common.response import ResponseType
 from ..common.selector import AbstractSelector
 from ..common.server_manager import ServerManager
 
@@ -33,7 +31,7 @@ class NamingClient(object):
         self._namespace = namespace
         self._service_info_holder = service_info_holder
         server_manager = ServerManager()
-        self._grpc = GrpcClient(NAMING, server_manager, labels)
+        self._grpc_client = GrpcClient(NAMING, server_manager, labels)
         self._security_proxy = SecurityProxy(NAMING, server_manager.get_server_urls())
         self._redo = NamingRedoService(self)
         self._update = ServiceInfoUpdateService(
@@ -46,29 +44,22 @@ class NamingClient(object):
 
     async def start(self):
         logger.debug("[Naming] client start")
-        self._security_proxy.refresh_auth_task()
-        self._grpc.register_connection_listener(self._redo)
-        self._grpc.register_request_handler(
+        self._security_proxy.start()
+        self._grpc_client.register_connection_listener(self._redo)
+        self._grpc_client.register_request_handler(
             NamingPushRequestHandler(self._service_info_holder)
         )
-        await self._grpc.start()
+        await self._grpc_client.start()
 
     def stop(self):
         logger.debug("[Naming] client stop")
         self._update.stop()
         self._security_proxy.stop()
-        self._grpc.stop()
+        self._grpc_client.stop()
 
-    async def _req2server(self, req, throw: bool = True) -> ResponseType:
+    async def _req2server(self, req, throw: bool = True):
         req.headers.update(self._security_proxy.get_identity_context())
-        rsp: ResponseType = await self._grpc.request(req, throw=throw)
-        if rsp.success:
-            return rsp
-
-        # when request failed
-        logger.error("[Naming] request failed: %s, %s", req, rsp)
-        if throw:
-            NacosException(rsp.errorCode, rsp.message)
+        return await self._grpc_client.request(req, throw=throw)
 
     async def register(
         self, service_name: str, group_name: str, instance: Instance, throw: bool = True
@@ -101,7 +92,7 @@ class NamingClient(object):
     async def batch_register(
         self, service_name: str, group_name: str, instances: t.List[Instance]
     ):
-        # todo support batch register, for what scenario
+        # todo support batch register, in future, for what scenario
         pass
 
     async def query_instance_of_service(
@@ -112,7 +103,7 @@ class NamingClient(object):
         udp_port: int,
         healthy_only: bool,
         throw: bool = True,
-    ) -> ServiceInfo:
+    ):
         req = ServiceQueryRequest(
             cluster=clusters,
             udpPort=udp_port,
@@ -122,11 +113,11 @@ class NamingClient(object):
             healthyOnly=healthy_only,
         )
         rsp: QueryServiceResponse = await self._req2server(req, throw=throw)
-        return rsp.serviceInfo
+        return rsp and rsp.serviceInfo
 
     async def subscribe(
         self, service_name: str, group_name: str, clusters: str, throw: bool = True
-    ) -> ServiceInfo:
+    ):
         group_service_name = NamingUtils.get_group_name(service_name, group_name)
         key = ServiceInfo.get_key(group_service_name, clusters)
         # Get service info from cache.
@@ -179,14 +170,14 @@ class NamingClient(object):
             groupName=group_name,
             namespace=self._namespace,
         )
-        # todo support selector
+        # todo support selector in future
         # if selector is not None:
         #     pass
         rsp: ServiceListResponse = await self._req2server(req)
         return rsp.count, rsp.serviceNames
 
     def server_health(self):
-        return self._grpc.is_running()
+        return self._grpc_client.is_running()
 
 
 class UpdateTask(object):
@@ -387,18 +378,18 @@ class ServiceInfoUpdateService(object):
 
 class NamingRedoService(ConnectionEventListener):
     def __init__(self, client: NamingClient):
-        self._client = client
+        self._naming_client = client
         self._is_first_connected = True
         self._register_map = {}
         self._subscribe_map = {}
 
     def on_connected(self):
-        asyncio.create_task(self.run())
         # logger.debug("[Naming] on connected.")
+        asyncio.create_task(self.run())
 
     def on_disconnected(self):
-        self._client.update.stop()
         # logger.debug("[Naming] on disconnected.")
+        self._naming_client.update.stop()
 
     def cache_register(self, service_name: str, group_name: str, instance: Instance):
         # assume one application can only register one instance with same group&service
@@ -429,6 +420,6 @@ class NamingRedoService(ConnectionEventListener):
 
         logger.debug("[Naming] redo service start")
         for _, args in self._register_map.items():
-            await self._client.register(*args, throw=False)
+            await self._naming_client.register(*args, throw=False)
         for _, args in self._subscribe_map.items():
-            await self._client.subscribe(*args, throw=False)
+            await self._naming_client.subscribe(*args, throw=False)

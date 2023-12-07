@@ -1,7 +1,6 @@
 import typing as t
 from uuid import uuid4
 
-from . import cache_dir
 from .balancer import Balancer
 from .client import NamingClient
 from .event import InstanceChangeEvent
@@ -17,8 +16,13 @@ from ..common.selector import AbstractSelector
 
 
 class NamingService(object):
-    def __init__(self):
-        self.namespace = conf.naming_namespace or cst.DEFAULT_NAMESPACE_ID
+    def __init__(
+        self,
+        namespace: str = None,
+        cache_dir: str = None,
+    ):
+        self._namespace = namespace or conf.naming_namespace or cst.DEFAULT_NAMESPACE_ID
+        self._cache_dir = cache_dir or conf.naming_cache
         self._notifier_event_scope = str(uuid4())
         self._change_notifier = InstanceChangeNotifier(self._notifier_event_scope)
 
@@ -26,21 +30,21 @@ class NamingService(object):
         NOTIFY_CENTER.register_subscriber(self._change_notifier)
 
         self._service_info_holder = ServiceInfoHolder(
-            self._notifier_event_scope, cache_dir
+            self._notifier_event_scope, self._cache_dir
         )
-        self._client = NamingClient(
-            self.namespace,
+        self._naming_client = NamingClient(
+            self._namespace,
             self._service_info_holder,
             self._change_notifier,
         )
 
     async def start(self):
         logger.info("[Naming] service start")
-        await self._client.start()
+        await self._naming_client.start()
 
     def stop(self):
         logger.info("[Naming] service stop")
-        self._client.stop()
+        self._naming_client.stop()
 
     async def register_instance(
         self,
@@ -54,7 +58,7 @@ class NamingService(object):
         if instance is None:
             instance = Instance(ip=ip, port=port, clusterName=cluster_name)
         NamingUtils.check_instance_legal(instance)
-        await self._client.register(service_name, group_name, instance)
+        await self._naming_client.register(service_name, group_name, instance)
 
     async def deregister_instance(
         self,
@@ -67,7 +71,7 @@ class NamingService(object):
     ):
         if instance is None:
             instance = Instance(ip=ip, port=port, clusterName=cluster_name)
-        await self._client.deregister(service_name, group_name, instance)
+        await self._naming_client.deregister(service_name, group_name, instance)
 
     async def batch_register_instance(
         self,
@@ -93,11 +97,11 @@ class NamingService(object):
             )
 
             if service_info is None:
-                service_info = await self._client.subscribe(
+                service_info = await self._naming_client.subscribe(
                     service_name, group_name, clusters
                 )
         else:
-            service_info = await self._client.query_instance_of_service(
+            service_info = await self._naming_client.query_instance_of_service(
                 service_name, group_name, clusters, 0, False
             )
 
@@ -118,11 +122,11 @@ class NamingService(object):
                 service_name, group_name, clusters
             )
             if service_info is None:
-                service_info = await self._client.subscribe(
+                service_info = await self._naming_client.subscribe(
                     service_name, group_name, clusters
                 )
         else:
-            service_info = self._client.query_instance_of_service(
+            service_info = self._naming_client.query_instance_of_service(
                 service_name, group_name, clusters, 0, False
             )
 
@@ -148,11 +152,11 @@ class NamingService(object):
                 service_name, group_name, clusters
             )
             if service_info is None:
-                service_info = await self._client.subscribe(
+                service_info = await self._naming_client.subscribe(
                     service_name, group_name, clusters
                 )
         else:
-            service_info = self._client.query_instance_of_service(
+            service_info = self._naming_client.query_instance_of_service(
                 service_name, group_name, clusters, 0, False
             )
         return Balancer.random_host_by_weight(service_info)
@@ -171,7 +175,7 @@ class NamingService(object):
         self._change_notifier.register_listener(
             service_name, group_name, clusters, listener
         )
-        return await self._client.subscribe(service_name, group_name, clusters)
+        return await self._naming_client.subscribe(service_name, group_name, clusters)
 
     async def unsubscribe(
         self,
@@ -183,7 +187,7 @@ class NamingService(object):
         clusters = NamingUtils.parse_clusters(clusters)
 
         if self._change_notifier.is_subscribed(service_name, group_name, clusters):
-            await self._client.unsubscribe(service_name, group_name, clusters)
+            await self._naming_client.unsubscribe(service_name, group_name, clusters)
 
         self._change_notifier.deregister_listener(
             service_name, group_name, clusters, listener
@@ -196,7 +200,7 @@ class NamingService(object):
         group_name: str = cst.DEFAULT_GROUP,
         selector: AbstractSelector = None,
     ):
-        return await self._client.get_services_list(
+        return await self._naming_client.get_services_list(
             page_no, page_size, group_name, selector
         )
 
@@ -204,4 +208,4 @@ class NamingService(object):
         return self._change_notifier.get_subscribe_services()
 
     def get_server_status(self):
-        return "UP" if self._client.server_health() else "DOWN"
+        return "UP" if self._naming_client.server_health() else "DOWN"

@@ -1,8 +1,8 @@
 class ClientNamingAbility(object):
-    # todo
+    # todo in future
     ...
 
 
 class ServerNamingAbility(object):
-    # todo
+    # todo in future
     ...

@@ -10,10 +10,19 @@ log_level = logging.getLevelName(getenv("NACOS_LOG_LEVEL", "DEBUG"))
 cache_dir = getenv("NACOS_CACHE_DIR")
 # todo home dir
 cache_dir = Path(cache_dir) if cache_dir else base_dir / ".nacos"
+naming_cache = cache_dir / "naming"
+config_cache = cache_dir / "config"
+
+login_path = "/nacos/v1/auth/users/login"
+login_timeout = int(getenv("NACOS_LOGIN_TIMEOUT", "30"))  # seconds
 
 auth_enable = getenv("NACOS_AUTH_ENABLE") == "true"
-username = getenv("NACOS_USERNAME")
-password = getenv("NACOS_PASSWORD")
+username = getenv("NACOS_USERNAME", "nacos")
+password = getenv("NACOS_PASSWORD", "nacos")
+
+role_name = getenv("NACOS_ROLE_NAME", "")
+access_key = getenv("NACOS_ACCESS_KEY", "")
+secret_key = getenv("NACOS_SECRET_KEY", "")
 
 config_namespace = getenv("NACOS_CONFIG_NAMESPACE", "")
 naming_namespace = getenv("NACOS_NAMING_NAMESPACE", "")

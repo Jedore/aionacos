@@ -1,11 +1,9 @@
-from typing import Tuple, List
-
-from .service import AuthService, NacosAuthService
+from .service import HttpAuthService, RamAuthService
 
 
 class AuthPluginManager(object):
-    def __init__(self, name: str, server_urls: List[str]):
-        self._auth_services: Tuple[AuthService] = (NacosAuthService(name),)
+    def __init__(self, service: str, server_urls: list):
+        self._auth_services = (HttpAuthService(service), RamAuthService(service))
 
         for auth_service in self._auth_services:
             auth_service.server_urls = server_urls

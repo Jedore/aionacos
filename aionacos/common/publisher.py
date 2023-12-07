@@ -71,6 +71,7 @@ class DefaultPublisher(EventPublisher):
         try:
             self._queue.put_nowait(event)
         except asyncio.QueueFull:
+            # skip
             pass
 
     def receive_event(self, event: Event):

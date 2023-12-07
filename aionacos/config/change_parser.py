@@ -1,24 +1,29 @@
+import abc
+import typing as t
+
 import orjson
+import yaml
 
 from .event import ConfigChangeItem, ChangeType
+from ..common.log import logger
 
-CONFIG_PARSER_REGISTRY = {}
+CONFIG_PARSER_REGISTRY: t.Dict[str, "AbstractConfigChangeParser"] = {}
 
 
-class ConfigChangeParseMeta(type):
+class ConfigChangeParserMeta(abc.ABCMeta):
     def __new__(metacls, cls_name, bases, cls_dict):
         new_cls = super().__new__(metacls, cls_name, bases, cls_dict)
-        if cls_name != "AbstractConfigChangeParse":
-            CONFIG_PARSER_REGISTRY[cls_dict["config_type"]] = new_cls
+        if cls_name != "AbstractConfigChangeParser":
+            CONFIG_PARSER_REGISTRY[cls_dict["config_type"]] = new_cls()
         return new_cls
 
 
-class AbstractConfigChangeParse(metaclass=ConfigChangeParseMeta):
+class AbstractConfigChangeParser(metaclass=ConfigChangeParserMeta):
     config_type = ""
 
-    @staticmethod
-    def do_parse(old_content: str, new_content: str):
-        raise NotImplementedError()
+    @abc.abstractmethod
+    def parse(self, old_content: str, new_content: str):
+        raise NotImplementedError('users must define "parse" to use this base class')
 
     @staticmethod
     def filter_change_data(old_config: dict, new_config: dict):
@@ -50,27 +55,75 @@ class AbstractConfigChangeParse(metaclass=ConfigChangeParseMeta):
         return changed_map
 
 
-class PropertiesChangeParser(AbstractConfigChangeParse):
+class TextConfigChangeParser(AbstractConfigChangeParser):
+    config_type = "text"
+
+    def parse(self, old_content: str, new_content: str):
+        key, type_ = "content", None
+        if not old_content and new_content:
+            type_ = ChangeType.ADDED
+        elif old_content and new_content and old_content != new_content:
+            type_ = ChangeType.MODIFIED
+        elif old_content and not new_content:
+            type_ = ChangeType.DELETED
+
+        return {
+            "content": ConfigChangeItem(
+                key=key,
+                type_=type_,
+                new_value=new_content,
+                old_value=old_content,
+            )
+        }
+
+
+class PropertiesConfigChangeParser(AbstractConfigChangeParser):
     config_type = "properties"
 
-    @classmethod
-    def do_parse(cls, old_content: str, new_content: str):
-        pass
+    def parse(self, old_content: str, new_content: str):
+        # todo properties parser in future
+        raise NotImplementedError('users must define "parse" to use this base class')
 
 
-class YamlChangeParser(AbstractConfigChangeParse):
+class YamlConfigChangeParser(AbstractConfigChangeParser):
     config_type = "yaml"
 
-    @classmethod
-    def do_parse(cls, old_content: str, new_content: str):
-        pass
+    def parse(self, old_content: str, new_content: str):
+        try:
+            old_map = yaml.load(old_content, yaml.Loader) if old_content else {}
+            new_map = yaml.load(new_content, yaml.Loader) if new_content else {}
+            return self.filter_change_data(old_map, new_map)
+        except Exception as err:
+            logger.error(f"[Config] Parse yaml failed: {err}")
 
 
-class JsonChangeParser(AbstractConfigChangeParse):
+class JsonConfigChangeParser(AbstractConfigChangeParser):
     config_type = "json"
 
-    @classmethod
-    def do_parse(cls, old_content: str, new_content: str):
-        old_props = orjson.loads(old_content) if old_content else {}
-        new_props = orjson.loads(new_content) if new_content else {}
-        return cls.filter_change_data(old_props, new_props)
+    def parse(self, old_content: str, new_content: str):
+        try:
+            old_map = orjson.loads(old_content) if old_content else {}
+            new_map = orjson.loads(new_content) if new_content else {}
+            return self.filter_change_data(old_map, new_map)
+        except Exception as err:
+            logger.error(f"[Config] Parse json failed: {err}")
+
+
+class XMLConfigChangeParser(AbstractConfigChangeParser):
+    config_type = "xml"
+
+    def parse(self, old_content: str, new_content: str):
+        # todo xml parser in future
+        raise NotImplementedError('users must define "parse" to use this base class')
+
+
+class HTMLConfigChangeParser(AbstractConfigChangeParser):
+    config_type = "html"
+
+    def parse(self, old_content: str, new_content: str):
+        # todo html parser in future
+        raise NotImplementedError('users must define "parse" to use this base class')
+
+
+def get_parser(config_type: str) -> AbstractConfigChangeParser:
+    return CONFIG_PARSER_REGISTRY.get(config_type.lower(), TextConfigChangeParser)
