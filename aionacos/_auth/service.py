@@ -92,7 +92,7 @@ class HttpAuthService(AbstractAuthService):
 
 
 class RamAuthService(AbstractAuthService):
-    # todo ram auth
+    # todo ram auth, maybe just for MSE users
     def login(self):
         pass
 

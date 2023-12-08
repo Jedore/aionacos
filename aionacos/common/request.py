@@ -27,6 +27,7 @@ class Request(Serializable, metaclass=RegistryMeta):
         requestId: str = None,
         headers: dict = None,
         module: str = None,
+        **kwargs,
     ):
         self.requestId = requestId
         self.module = module

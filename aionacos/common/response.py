@@ -31,6 +31,7 @@ class Response(Serializable, metaclass=RegistryMeta):
         resultCode: int = ResponseCode.SUCCESS.code,
         message: str = "",
         success: bool = None,
+        **kwargs,
     ):
         self.requestId = requestId
         self.resultCode = resultCode
